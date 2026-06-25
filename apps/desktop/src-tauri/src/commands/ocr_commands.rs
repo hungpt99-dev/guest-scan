@@ -150,36 +150,21 @@ pub async fn run_ocr_placeholder(request: OcrRequest) -> OcrJobResult {
 }
 
 fn find_ocr_worker() -> String {
-    let candidates = vec![
-        "python".to_string(),
-        "python3".to_string(),
-        "guestfill-ocr.exe".to_string(),
-        "guestfill-ocr".to_string(),
-    ];
+    let python_cmd = if cfg!(target_os = "windows") {
+        "python"
+    } else {
+        "python3"
+    };
 
-    for candidate in &candidates {
-        if which(candidate).is_some() {
-            // If it's python, we need to run it as a module
-            if candidate == "python" || candidate == "python3" {
-                return candidate.clone();
-            }
-            return candidate.clone();
-        }
+    // Check if python is available
+    if Command::new(python_cmd).arg("--version").output().is_ok() {
+        return python_cmd.to_string();
     }
 
+    // Fallback
     "python".to_string()
 }
 
-fn which(command: &str) -> Option<String> {
-    let is_windows = cfg!(target_os = "windows");
-    let check_cmd = if is_windows { "where" } else { "which" };
-
-    let output = Command::new(check_cmd).arg(command).output().ok()?;
-
-    if output.status.success() {
-        let path = String::from_utf8_lossy(&output.stdout).lines().next()?.to_string();
-        Some(path)
-    } else {
-        None
-    }
+fn is_python_available(command: &str) -> bool {
+    Command::new(command).arg("--version").output().is_ok()
 }
