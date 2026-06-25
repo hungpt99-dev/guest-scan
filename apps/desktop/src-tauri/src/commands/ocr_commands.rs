@@ -84,12 +84,18 @@ pub async fn run_ocr(request: OcrRequest) -> Result<OcrJobResult, AppError> {
         AppError::with_technical("REQUEST_WRITE_FAILED", "Could not write request file", e.to_string())
     })?;
 
-    let worker_path = find_ocr_worker();
+    let (worker_path, worker_args) = build_worker_command();
 
-    let output = Command::new(&worker_path)
-        .args(["create-excel", "--request", &request_path.to_string_lossy(), "--response", &response_path.to_string_lossy()])
-        .current_dir(temp_dir.parent().unwrap_or(&temp_dir))
-        .output()
+    let mut cmd = Command::new(&worker_path);
+    cmd.args(&worker_args);
+    cmd.arg("create-excel");
+    cmd.arg("--request");
+    cmd.arg(&request_path.to_string_lossy());
+    cmd.arg("--response");
+    cmd.arg(&response_path.to_string_lossy());
+    cmd.current_dir(temp_dir.parent().unwrap_or(&temp_dir));
+
+    let output = cmd.output()
         .map_err(|e| {
             AppError::with_technical(
                 "OCR_WORKER_FAILED",
@@ -149,22 +155,14 @@ pub async fn run_ocr_placeholder(request: OcrRequest) -> OcrJobResult {
     }
 }
 
-fn find_ocr_worker() -> String {
-    let python_cmd = if cfg!(target_os = "windows") {
-        "python"
-    } else {
-        "python3"
-    };
-
-    // Check if python is available
-    if Command::new(python_cmd).arg("--version").output().is_ok() {
-        return python_cmd.to_string();
+fn build_worker_command() -> (String, Vec<String>) {
+    // Prefer packaged executable, fall back to python -m guestfill_ocr
+    for exe in &["guestfill-ocr.exe", "guestfill-ocr"] {
+        if Command::new(exe).arg("--help").output().is_ok() {
+            return (exe.to_string(), vec![]);
+        }
     }
 
-    // Fallback
-    "python".to_string()
-}
-
-fn is_python_available(command: &str) -> bool {
-    Command::new(command).arg("--version").output().is_ok()
+    let python = if cfg!(target_os = "windows") { "python" } else { "python3" };
+    ("python".to_string(), vec!["-m".to_string(), "guestfill_ocr".to_string()])
 }
