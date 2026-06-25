@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "GuestFill Auto-fill",
+  "version": "0.1.0",
+  "description": "GuestFill browser extension for filling guest information into hotel systems.",
+  "permissions": ["activeTab", "storage", "scripting", "sidePanel"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "GuestFill",
+    "default_icon": {}
+  },
+  "side_panel": {
+    "default_path": "side-panel.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+# Node
+node_modules/
+dist/
+dist-ssr/
+.vite/
+.next/
+coverage/
+
+# Tauri / Rust
+target/
+apps/desktop/src-tauri/target/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Local app data
+GuestFill/temp/
+GuestFill/exports/
+GuestFill/logs/
+
+# Sensitive documents
+*.xlsx
+*.xls
+*.pdf
+test-data/private/
+test-data/real/
+test-data/customer/
+passports/
+ids/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/settings.json
+
+# pnpm
+.pnpm-store/

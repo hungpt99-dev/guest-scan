@@ -1,0 +1,37 @@
+{
+  "passport": {
+    "requiredFields": [
+      "full_name",
+      "passport_number",
+      "nationality",
+      "date_of_birth",
+      "gender",
+      "passport_expiry_date"
+    ],
+    "mrzLineLength": 44,
+    "mrzLineCount": 2,
+    "confidenceStart": 0.5,
+    "confidenceMrzFound": 0.15,
+    "confidenceLineValid": 0.1,
+    "confidenceCheckDigit": 0.1,
+    "confidenceFieldsExist": 0.05,
+    "confidenceImageGood": 0.05,
+    "penaltyWarning": 0.1,
+    "penaltyVisualFallback": 0.15,
+    "penaltyRepair": 0.2,
+    "penaltyLowImage": 0.2
+  },
+  "idCard": {
+    "requiredFields": ["full_name", "id_number", "date_of_birth", "gender", "document_type"],
+    "confidenceStart": 0.4,
+    "confidenceQrParsed": 0.25,
+    "confidenceOcrFields": 0.15,
+    "confidenceLayout": 0.1,
+    "confidenceDateValid": 0.1,
+    "confidenceNumberPattern": 0.1,
+    "confidenceImageGood": 0.05,
+    "penaltyWarning": 0.1,
+    "penaltyConflict": 0.2,
+    "penaltyLowImage": 0.2
+  }
+}

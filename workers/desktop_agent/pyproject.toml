@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "guestfill-desktop-agent"
+version = "0.1.0"
+description = "GuestFill Desktop Automation Agent"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+guestfill-agent = "guestfill_agent.cli:cli"

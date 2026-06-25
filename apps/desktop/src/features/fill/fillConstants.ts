@@ -1,0 +1,52 @@
+export const FILL_FIELDS = [
+  { key: "fullName", label: "Full Name" },
+  { key: "passportNumber", label: "Passport Number" },
+  { key: "idNumber", label: "ID Number" },
+  { key: "nationality", label: "Nationality" },
+  { key: "dateOfBirth", label: "Date of Birth" },
+  { key: "gender", label: "Gender" },
+  { key: "passportExpiryDate", label: "Passport Expiry Date" },
+  { key: "idExpiryDate", label: "ID Expiry Date" },
+  { key: "roomNumber", label: "Room Number" },
+  { key: "arrivalDate", label: "Arrival Date" },
+  { key: "departureDate", label: "Departure Date" },
+  { key: "reservationCode", label: "Reservation Code" },
+  { key: "note", label: "Note" },
+] as const;
+
+export const DEFAULT_FIELD_ORDER = FILL_FIELDS.map((f) => f.key);
+
+export const DEFAULT_KEYBOARD_SHORTCUTS = {
+  copyCurrentField: "Ctrl+Shift+C",
+  nextField: "Ctrl+Shift+N",
+  previousField: "Ctrl+Shift+P",
+  nextGuest: "Ctrl+Shift+G",
+  markFilled: "Ctrl+Shift+F",
+  markSkipped: "Ctrl+Shift+S",
+  emergencyStop: "Ctrl+Alt+Esc",
+} as const;
+
+export const ERROR_CODES = {
+  EXCEL_FILE_NOT_FOUND: "EXCEL_FILE_NOT_FOUND",
+  EXCEL_FILE_LOCKED: "EXCEL_FILE_LOCKED",
+  EXCEL_IMPORT_FAILED: "EXCEL_IMPORT_FAILED",
+  GUESTS_SHEET_NOT_FOUND: "GUESTS_SHEET_NOT_FOUND",
+  MISSING_REQUIRED_COLUMN: "MISSING_REQUIRED_COLUMN",
+  NO_VALID_ROWS: "NO_VALID_ROWS",
+  INVALID_DATE_FORMAT: "INVALID_DATE_FORMAT",
+  INVALID_GENDER_VALUE: "INVALID_GENDER_VALUE",
+  DUPLICATE_DOCUMENT_NUMBER: "DUPLICATE_DOCUMENT_NUMBER",
+  CLIPBOARD_COPY_FAILED: "CLIPBOARD_COPY_FAILED",
+  TARGET_SYSTEM_NOT_SELECTED: "TARGET_SYSTEM_NOT_SELECTED",
+  TARGET_PAGE_MISMATCH: "TARGET_PAGE_MISMATCH",
+  TARGET_WINDOW_MISMATCH: "TARGET_WINDOW_MISMATCH",
+  TARGET_FIELD_NOT_FOUND: "TARGET_FIELD_NOT_FOUND",
+  TARGET_FIELD_DISABLED: "TARGET_FIELD_DISABLED",
+  REQUIRED_VALUE_MISSING: "REQUIRED_VALUE_MISSING",
+  AUTO_SAVE_NOT_CONFIGURED: "AUTO_SAVE_NOT_CONFIGURED",
+  AUTO_SAVE_SAFETY_CHECK_FAILED: "AUTO_SAVE_SAFETY_CHECK_FAILED",
+  AUTO_SAVE_FAILED: "AUTO_SAVE_FAILED",
+  FILL_STATUS_SAVE_FAILED: "FILL_STATUS_SAVE_FAILED",
+  FILL_LOG_EXPORT_FAILED: "FILL_LOG_EXPORT_FAILED",
+  FILL_STOPPED_BY_USER: "FILL_STOPPED_BY_USER",
+} as const;

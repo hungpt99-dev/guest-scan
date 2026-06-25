@@ -1,0 +1,4 @@
+# GuestFill Desktop Agent dependencies
+# Uncomment when implementing real desktop automation:
+# pywinauto>=6.8.0
+# pyautogui>=0.9.54

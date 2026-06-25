@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "guestfill-ocr"
+version = "0.1.0"
+description = "GuestFill OCR Worker - Extract guest information from passport/ID documents"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+guestfill-ocr = "guestfill_ocr.cli.commands:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["guestfill_ocr*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

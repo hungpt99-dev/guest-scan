@@ -1,0 +1,49 @@
+export const GUEST_STATUS = {
+  READY: "READY",
+  NEED_REVIEW: "NEED_REVIEW",
+  FAILED: "FAILED",
+  MISSING_DATA: "MISSING_DATA",
+  FILLED: "FILLED",
+  SKIPPED: "SKIPPED",
+} as const;
+
+export const FILL_STATUS = {
+  PENDING: "PENDING",
+  IN_PROGRESS: "IN_PROGRESS",
+  FILLED: "FILLED",
+  SKIPPED: "SKIPPED",
+  FAILED: "FAILED",
+} as const;
+
+export const DOCUMENT_TYPE = {
+  PASSPORT: "PASSPORT",
+  ID_CARD: "ID_CARD",
+  UNKNOWN: "UNKNOWN",
+} as const;
+
+export const CONFIDENCE_LEVEL = {
+  HIGH: "HIGH",
+  MEDIUM: "MEDIUM",
+  LOW: "LOW",
+} as const;
+
+export const GENDER = {
+  M: "M",
+  F: "F",
+  UNKNOWN: "UNKNOWN",
+} as const;
+
+export const OCR_JOB_STATUS = {
+  IDLE: "IDLE",
+  PROCESSING: "PROCESSING",
+  COMPLETED: "COMPLETED",
+  FAILED: "FAILED",
+} as const;
+
+export const WARNING_CODES = {
+  LOW_CONFIDENCE: "LOW_CONFIDENCE",
+  MISSING_FIELD: "MISSING_FIELD",
+  INVALID_FORMAT: "INVALID_FORMAT",
+  EXPIRED_DOCUMENT: "EXPIRED_DOCUMENT",
+  UNSUPPORTED_DOCUMENT: "UNSUPPORTED_DOCUMENT",
+} as const;

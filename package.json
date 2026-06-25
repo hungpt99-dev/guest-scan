@@ -1,0 +1,42 @@
+{
+  "name": "guestfill",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm dev:desktop",
+    "dev:desktop": "pnpm --filter @guestfill/desktop dev",
+    "dev:ocr": "cd workers/ocr && python -m guestfill_ocr --help",
+    "build": "pnpm build:desktop",
+    "build:desktop": "pnpm --filter @guestfill/desktop build",
+    "format": "pnpm format:ts && pnpm format:py",
+    "format:ts": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .gitignore",
+    "format:py": "cd workers/ocr && python -m ruff format .",
+    "format:check": "pnpm format:check:ts && pnpm format:check:py",
+    "format:check:ts": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .gitignore",
+    "format:check:py": "cd workers/ocr && python -m ruff format --check .",
+    "lint": "pnpm lint:ts && pnpm lint:py",
+    "lint:ts": "pnpm --filter @guestfill/desktop lint",
+    "lint:py": "cd workers/ocr && python -m ruff check .",
+    "typecheck": "pnpm typecheck:ts && pnpm typecheck:py",
+    "typecheck:ts": "pnpm --filter @guestfill/desktop typecheck",
+    "typecheck:py": "cd workers/ocr && python -m mypy guestfill_ocr --ignore-missing-imports || echo \"mypy warnings (non-blocking)\"",
+    "test": "pnpm test:ts && pnpm test:py",
+    "test:ts": "pnpm --filter @guestfill/desktop test",
+    "test:py": "cd workers/ocr && python -m pytest",
+    "quality": "pnpm format:check && pnpm lint && pnpm typecheck",
+    "verify": "pnpm quality && pnpm test",
+    "secrets:scan": "node scripts/secret-scan.mjs",
+    "codegraph": "node scripts/codegraph-trigger.mjs",
+    "commitlint": "commitlint --edit",
+    "check-env": "node scripts/check-env.mjs",
+    "verify-workspace": "node scripts/verify-workspace.mjs",
+    "prepare": "lefthook install",
+    "clean": "pnpm --recursive clean"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.1.0",
+    "@commitlint/config-conventional": "^21.1.0",
+    "eslint": "^10.5.0",
+    "lefthook": "^2.1.9",
+    "prettier": "^3.8.4"
+  }
+}
