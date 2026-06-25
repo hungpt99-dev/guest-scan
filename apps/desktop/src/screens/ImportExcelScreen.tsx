@@ -15,7 +15,6 @@ export default function ImportExcelScreen() {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
-  const [_sessionId, setSessionId] = useState<string>("");
 
   const handleSelectFile = async () => {
     try {
@@ -43,7 +42,6 @@ export default function ImportExcelScreen() {
       const result = await importExcelFromPath(excelPath);
       if (result.success) {
         setSummary(result.summary);
-        setSessionId(result.sessionId);
         setSession({
           id: result.sessionId,
           excelPath,

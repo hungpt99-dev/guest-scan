@@ -20,6 +20,7 @@ fn main() {
             file_commands::select_output_file,
             file_commands::open_file,
             file_commands::open_folder,
+            ocr_commands::run_ocr,
             ocr_commands::run_ocr_placeholder,
             excel_commands::read_excel_file,
             excel_commands::export_excel_placeholder,

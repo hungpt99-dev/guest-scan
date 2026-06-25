@@ -19,4 +19,15 @@ export type OcrRequest = {
 export type OcrOptions = {
   language?: string;
   preprocessing?: boolean;
+  documentMode?: string;
+  maxImageWidth?: number;
+  perImageTimeoutSeconds?: number;
+  perCandidateTimeoutSeconds?: number;
+  enablePassportMrz?: boolean;
+  enablePassportVisualOcr?: boolean;
+  enableIdCardOcr?: boolean;
+  enablePdfInput?: boolean;
+  enableDiagnosticsSheet?: boolean;
+  deleteTempFiles?: boolean;
+  progressPath?: string;
 };

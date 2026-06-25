@@ -1,19 +1,32 @@
 use crate::error::AppError;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::process::Command;
+use std::fs;
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 pub struct OcrRequest {
     pub files: Vec<String>,
     pub output_path: String,
+    pub progress_path: Option<String>,
     pub options: Option<OcrOptions>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 pub struct OcrOptions {
-    pub language: Option<String>,
-    pub preprocessing: Option<bool>,
+    pub document_mode: Option<String>,
+    pub max_image_width: Option<u32>,
+    pub per_image_timeout_seconds: Option<u32>,
+    pub per_candidate_timeout_seconds: Option<u32>,
+    pub enable_passport_mrz: Option<bool>,
+    pub enable_passport_visual_ocr: Option<bool>,
+    pub enable_id_card_ocr: Option<bool>,
+    pub enable_pdf_input: Option<bool>,
+    pub enable_diagnostics_sheet: Option<bool>,
+    pub delete_temp_files: Option<bool>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Serialize)]
 pub struct OcrJobResult {
     pub job_id: String,
     pub status: String,
@@ -22,7 +35,7 @@ pub struct OcrJobResult {
     pub errors: Vec<AppError>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Serialize)]
 pub struct OcrSummary {
     pub total_files: u32,
     pub total_documents: u32,
@@ -30,6 +43,87 @@ pub struct OcrSummary {
     pub need_review: u32,
     pub failed: u32,
     pub average_confidence: f64,
+}
+
+#[tauri::command]
+pub async fn run_ocr(request: OcrRequest) -> Result<OcrJobResult, AppError> {
+    let job_id = uuid::Uuid::new_v4().to_string();
+
+    let temp_dir = std::env::temp_dir().join("guestfill_ocr_jobs").join(&job_id);
+    fs::create_dir_all(&temp_dir).map_err(|e| {
+        AppError::with_technical("TEMP_DIR_FAILED", "Could not create temp directory", e.to_string())
+    })?;
+
+    let request_path = temp_dir.join("request.json");
+    let response_path = temp_dir.join("response.json");
+
+    let request_body = serde_json::json!({
+        "jobId": job_id,
+        "inputPaths": request.files,
+        "outputPath": request.output_path,
+        "progressPath": request.progress_path.unwrap_or_default(),
+        "options": {
+            "documentMode": request.options.as_ref().and_then(|o| o.document_mode.clone()).unwrap_or_else(|| "auto".to_string()),
+            "maxImageWidth": request.options.as_ref().and_then(|o| o.max_image_width).unwrap_or(1800),
+            "perImageTimeoutSeconds": request.options.as_ref().and_then(|o| o.per_image_timeout_seconds).unwrap_or(45),
+            "perCandidateTimeoutSeconds": request.options.as_ref().and_then(|o| o.per_candidate_timeout_seconds).unwrap_or(8),
+            "enablePassportMrz": request.options.as_ref().and_then(|o| o.enable_passport_mrz).unwrap_or(true),
+            "enablePassportVisualOcr": request.options.as_ref().and_then(|o| o.enable_passport_visual_ocr).unwrap_or(true),
+            "enableIdCardOcr": request.options.as_ref().and_then(|o| o.enable_id_card_ocr).unwrap_or(true),
+            "enablePdfInput": request.options.as_ref().and_then(|o| o.enable_pdf_input).unwrap_or(true),
+            "enableDiagnosticsSheet": request.options.as_ref().and_then(|o| o.enable_diagnostics_sheet).unwrap_or(true),
+            "deleteTempFiles": request.options.as_ref().and_then(|o| o.delete_temp_files).unwrap_or(true),
+        }
+    });
+
+    let request_json = serde_json::to_string_pretty(&request_body).map_err(|e| {
+        AppError::with_technical("JSON_SERIALIZE_FAILED", "Could not serialize request", e.to_string())
+    })?;
+
+    fs::write(&request_path, &request_json).map_err(|e| {
+        AppError::with_technical("REQUEST_WRITE_FAILED", "Could not write request file", e.to_string())
+    })?;
+
+    let worker_path = find_ocr_worker();
+
+    let output = Command::new(&worker_path)
+        .args(["create-excel", "--request", &request_path.to_string_lossy(), "--response", &response_path.to_string_lossy()])
+        .current_dir(temp_dir.parent().unwrap_or(&temp_dir))
+        .output()
+        .map_err(|e| {
+            AppError::with_technical(
+                "OCR_WORKER_FAILED",
+                &format!("Could not start OCR worker. Tried: {}", worker_path),
+                e.to_string(),
+            )
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let response_content = fs::read_to_string(&response_path).unwrap_or_default();
+        if !response_content.is_empty() {
+            if let Ok(response) = serde_json::from_str::<OcrJobResult>(&response_content) {
+                return Ok(response);
+            }
+        }
+        return Err(AppError::with_technical(
+            "OCR_WORKER_FAILED",
+            "OCR worker failed to process the documents.",
+            &stderr,
+        ));
+    }
+
+    let response_content = fs::read_to_string(&response_path).map_err(|e| {
+        AppError::with_technical("RESPONSE_READ_FAILED", "OCR worker did not produce a response", e.to_string())
+    })?;
+
+    let result: OcrJobResult = serde_json::from_str(&response_content).map_err(|e| {
+        AppError::with_technical("RESPONSE_PARSE_FAILED", "Could not parse OCR worker response", e.to_string())
+    })?;
+
+    let _ = fs::remove_dir_all(&temp_dir);
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -52,5 +146,40 @@ pub async fn run_ocr_placeholder(request: OcrRequest) -> OcrJobResult {
             "PLACEHOLDER",
             "OCR is not yet implemented. This is a placeholder response.",
         )],
+    }
+}
+
+fn find_ocr_worker() -> String {
+    let candidates = vec![
+        "python".to_string(),
+        "python3".to_string(),
+        "guestfill-ocr.exe".to_string(),
+        "guestfill-ocr".to_string(),
+    ];
+
+    for candidate in &candidates {
+        if which(candidate).is_some() {
+            // If it's python, we need to run it as a module
+            if candidate == "python" || candidate == "python3" {
+                return candidate.clone();
+            }
+            return candidate.clone();
+        }
+    }
+
+    "python".to_string()
+}
+
+fn which(command: &str) -> Option<String> {
+    let is_windows = cfg!(target_os = "windows");
+    let check_cmd = if is_windows { "where" } else { "which" };
+
+    let output = Command::new(check_cmd).arg(command).output().ok()?;
+
+    if output.status.success() {
+        let path = String::from_utf8_lossy(&output.stdout).lines().next()?.to_string();
+        Some(path)
+    } else {
+        None
     }
 }
