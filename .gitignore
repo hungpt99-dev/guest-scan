@@ -54,3 +54,7 @@ Thumbs.db
 
 # pnpm
 .pnpm-store/
+
+
+#codegraph
+.flowtask/
