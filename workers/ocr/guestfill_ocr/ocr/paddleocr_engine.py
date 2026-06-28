@@ -7,6 +7,10 @@ Supports multi-language passport documents from around the world using
 PaddleOCR's multilingual model (lang='ml') and specific language models.
 """
 
+from __future__ import annotations
+
+import concurrent.futures
+import threading
 from typing import Any
 
 import cv2
@@ -17,7 +21,10 @@ from guestfill_ocr.common.result import Err, Ok, Result
 
 _PPOCR_AVAILABLE = False
 _PPOCR_CHECKED = False
+_PPOCR_CHECKED_LOCK = threading.Lock()
 _PPOCR_INSTANCES: dict[str, Any] = {}
+_PPOCR_INSTANCES_LOCK = threading.Lock()
+_PPOCR_HAS_GPU: bool | None = None
 
 MRZ_TD3_LENGTH = 44
 MRZ_TD2_LENGTH = 36
@@ -59,39 +66,63 @@ def check_paddleocr_available() -> bool:
     global _PPOCR_AVAILABLE, _PPOCR_CHECKED
     if _PPOCR_CHECKED:
         return _PPOCR_AVAILABLE
-    try:
-        import paddleocr  # type: ignore[import-untyped] # noqa: F401
+    with _PPOCR_CHECKED_LOCK:
+        if _PPOCR_CHECKED:
+            return _PPOCR_AVAILABLE
+        try:
+            import paddleocr  # type: ignore[import-untyped] # noqa: F401
 
-        _PPOCR_AVAILABLE = True
-    except ImportError:
-        _PPOCR_AVAILABLE = False
-    _PPOCR_CHECKED = True
+            _PPOCR_AVAILABLE = True
+        except ImportError:
+            _PPOCR_AVAILABLE = False
+        _PPOCR_CHECKED = True
     return _PPOCR_AVAILABLE
 
 
-def _get_paddleocr_instance(lang: str = DEFAULT_PPOCR_LANG) -> Any:
+def check_paddleocr_has_gpu() -> bool:
+    global _PPOCR_HAS_GPU
+    if _PPOCR_HAS_GPU is not None:
+        return _PPOCR_HAS_GPU
+    try:
+        import paddle  # type: ignore[import-untyped] # noqa: F401
+
+        _PPOCR_HAS_GPU = bool(paddle.is_compiled_with_cuda())
+    except ImportError:
+        _PPOCR_HAS_GPU = False
+    except Exception:
+        _PPOCR_HAS_GPU = False
+    return _PPOCR_HAS_GPU
+
+
+def _get_paddleocr_instance(lang: str = DEFAULT_PPOCR_LANG, use_gpu: bool | None = None) -> Any:
     global _PPOCR_INSTANCES
     if lang not in _PPOCR_INSTANCES:
-        from paddleocr import PaddleOCR
+        with _PPOCR_INSTANCES_LOCK:
+            if lang in _PPOCR_INSTANCES:
+                return _PPOCR_INSTANCES[lang]
+            from paddleocr import PaddleOCR
 
-        _PPOCR_INSTANCES[lang] = PaddleOCR(
-            lang=lang,
-            use_angle_cls=False,
-            show_log=False,
-            use_gpu=False,
-            det_db_thresh=0.3,
-            det_db_box_thresh=0.5,
-            rec_batch_num=6,
-        )
+            if use_gpu is None:
+                use_gpu = check_paddleocr_has_gpu()
+            _PPOCR_INSTANCES[lang] = PaddleOCR(
+                lang=lang,
+                use_angle_cls=False,
+                show_log=False,
+                use_gpu=use_gpu,
+                det_db_thresh=0.3,
+                det_db_box_thresh=0.5,
+                rec_batch_num=6,
+            )
     return _PPOCR_INSTANCES[lang]
 
 
 def reset_paddleocr_instance(lang: str | None = None) -> None:
     global _PPOCR_INSTANCES
-    if lang is None:
-        _PPOCR_INSTANCES.clear()
-    else:
-        _PPOCR_INSTANCES.pop(lang, None)
+    with _PPOCR_INSTANCES_LOCK:
+        if lang is None:
+            _PPOCR_INSTANCES.clear()
+        else:
+            _PPOCR_INSTANCES.pop(lang, None)
 
 
 def resolve_ocr_lang(country_code: str | None = None) -> str:
@@ -117,6 +148,67 @@ def resolve_ocr_lang(country_code: str | None = None) -> str:
     return country_to_lang.get(country_code, DEFAULT_PPOCR_LANG)
 
 
+def _prepare_image(image: np.ndarray | str, upscale_factor: float = 1.0) -> Result:
+    if isinstance(image, str):
+        img = cv2.imread(image)
+        if img is None:
+            return Err(OcrError("IMAGE_UNREADABLE", f"Cannot read image: {image}"))
+    elif isinstance(image, np.ndarray):
+        img = image
+        if len(img.shape) == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        elif len(img.shape) == 3 and img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+    else:
+        return Err(OcrError("OCR_FAILED", "Invalid image type"))
+
+    if upscale_factor > 1.0 and img is not None:
+        h, w = img.shape[:2]
+        img = cv2.resize(
+            img,
+            None,
+            fx=upscale_factor,
+            fy=upscale_factor,
+            interpolation=cv2.INTER_CUBIC,
+        )
+
+    return Ok(img)
+
+
+def _run_ocr_sync(
+    img: np.ndarray,
+    lang: str = DEFAULT_PPOCR_LANG,
+    confidence_threshold: float = 0.5,
+) -> Result:
+    ocr = _get_paddleocr_instance(lang=lang)
+    raw_result = ocr.ocr(img, cls=False)
+    if raw_result is None or len(raw_result) == 0 or raw_result[0] is None:
+        return Ok(("", []))
+    lines, details = _extract_mrz_text(raw_result, confidence_threshold)
+    return Ok((lines, details))
+
+
+def _run_ocr_with_timeout(
+    img: np.ndarray,
+    timeout: int,
+    lang: str = DEFAULT_PPOCR_LANG,
+    confidence_threshold: float = 0.5,
+) -> Result:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_run_ocr_sync, img, lang, confidence_threshold)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            return Err(
+                OcrError(
+                    "OCR_TIMEOUT",
+                    f"PaddleOCR timed out after {timeout}s for lang={lang}",
+                )
+            )
+        except Exception as e:
+            return Err(OcrError("OCR_FAILED", f"PaddleOCR failed: {e}"))
+
+
 def run_paddleocr_mrz(
     image: np.ndarray | str,
     timeout: int = 30,
@@ -132,40 +224,17 @@ def run_paddleocr_mrz(
             )
         )
 
-    try:
-        if isinstance(image, str):
-            img = cv2.imread(image)
-            if img is None:
-                return Err(OcrError("IMAGE_UNREADABLE", f"Cannot read image: {image}"))
-        elif isinstance(image, np.ndarray):
-            img = image
-            if len(img.shape) == 2:
-                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            elif len(img.shape) == 3 and img.shape[2] == 4:
-                img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
-        else:
-            return Err(OcrError("OCR_FAILED", "Invalid image type"))
+    prepared = _prepare_image(image, upscale_factor)
+    if prepared.is_err():
+        return prepared
 
-        if upscale_factor > 1.0 and img is not None:
-            h, w = img.shape[:2]
-            img = cv2.resize(
-                img,
-                None,
-                fx=upscale_factor,
-                fy=upscale_factor,
-                interpolation=cv2.INTER_CUBIC,
-            )
+    img = prepared.unwrap()
+    result = _run_ocr_with_timeout(img, timeout, lang, confidence_threshold)
+    if result.is_err():
+        return result
 
-        ocr = _get_paddleocr_instance(lang=lang)
-        result = ocr.ocr(img, cls=False)
-
-        if result is None or len(result) == 0 or result[0] is None:
-            return Ok("")
-
-        lines, _details = _extract_mrz_text(result, confidence_threshold)
-        return Ok("\n".join(lines))
-    except Exception as e:
-        return Err(OcrError("OCR_FAILED", f"PaddleOCR failed: {e}"))
+    lines, _details = result.unwrap()
+    return Ok("\n".join(lines))
 
 
 def run_paddleocr_mrz_with_details(
@@ -183,40 +252,17 @@ def run_paddleocr_mrz_with_details(
             )
         )
 
-    try:
-        if isinstance(image, str):
-            img = cv2.imread(image)
-            if img is None:
-                return Err(OcrError("IMAGE_UNREADABLE", f"Cannot read image: {image}"))
-        elif isinstance(image, np.ndarray):
-            img = image
-            if len(img.shape) == 2:
-                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-            elif len(img.shape) == 3 and img.shape[2] == 4:
-                img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
-        else:
-            return Err(OcrError("OCR_FAILED", "Invalid image type"))
+    prepared = _prepare_image(image, upscale_factor)
+    if prepared.is_err():
+        return prepared
 
-        if upscale_factor > 1.0 and img is not None:
-            h, w = img.shape[:2]
-            img = cv2.resize(
-                img,
-                None,
-                fx=upscale_factor,
-                fy=upscale_factor,
-                interpolation=cv2.INTER_CUBIC,
-            )
+    img = prepared.unwrap()
+    result = _run_ocr_with_timeout(img, timeout, lang, confidence_threshold)
+    if result.is_err():
+        return result
 
-        ocr = _get_paddleocr_instance(lang=lang)
-        result = ocr.ocr(img, cls=False)
-
-        if result is None or len(result) == 0 or result[0] is None:
-            return Ok(("", []))
-
-        lines, details = _extract_mrz_text(result, confidence_threshold)
-        return Ok((lines, details))
-    except Exception as e:
-        return Err(OcrError("OCR_FAILED", f"PaddleOCR failed: {e}"))
+    lines, details = result.unwrap()
+    return Ok((lines, details))
 
 
 def _compute_adaptive_y_tolerance(items: list) -> float:
@@ -340,7 +386,14 @@ def _try_detect_upside_down(lines: list[str]) -> bool:
             letter_count = sum(1 for c in last_chars if c.isalpha())
             if letter_count >= 3:
                 upside_down_hints += 1
-    return upside_down_hints > normal_hints
+        if len(line) >= 10:
+            first_chars = line[:5]
+            first_digits = sum(1 for c in first_chars if c.isdigit())
+            last_chars = line[-5:]
+            last_digits = sum(1 for c in last_chars if c.isdigit())
+            if first_digits >= 3 and last_digits < 2:
+                upside_down_hints += 2
+    return upside_down_hints > normal_hints or (upside_down_hints > 0 and normal_hints == 0 and len(lines) >= 2)
 
 
 def compute_average_confidence(char_details: list[dict]) -> float:
@@ -409,7 +462,6 @@ def _extract_mrz_text(
 
 
 def _score_mrz_likelihood(text: str) -> float:
-    score = 0.0
     if len(text) < 15:
         return 0.0
 
@@ -417,6 +469,7 @@ def _score_mrz_likelihood(text: str) -> float:
     if valid_chars / len(text) < 0.85:
         return 0.0
 
+    score = 0.0
     if text.startswith("P<"):
         score += 30.0
     elif text.startswith("P") and len(text) >= 40:
@@ -428,6 +481,8 @@ def _score_mrz_likelihood(text: str) -> float:
 
     if len(text) in MRZ_FORMAT_LENGTHS:
         score += 25.0
+        if len(text) == MRZ_TD3_LENGTH:
+            score += 10.0
     elif len(text) >= 40:
         score += 20.0
     elif len(text) >= 30:
