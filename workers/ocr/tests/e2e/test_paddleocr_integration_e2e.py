@@ -206,3 +206,125 @@ class TestPaddleOcrFallbackScenarios:
         ):
             best, _warnings, engine = select_best_candidate_with_engine([candidate], timeout=8, prefer_paddleocr=True)
             assert best is not None
+
+    def test_paddle_poor_result_triggers_tesseract_fallback(self) -> None:
+        """When PaddleOCR returns poor results (<2 clean lines), Tesseract fallback must run."""
+        candidate = OcrCandidate(
+            image=np.zeros((100, 100, 3), dtype=np.uint8),
+            psm=6,
+            preprocessing="grayscale",
+            crop_source="test",
+        )
+
+        mock_paddle_result = MagicMock()
+        mock_paddle_result.is_ok.return_value = True
+        mock_paddle_result.unwrap.return_value = (["SHORT_TEXT"], [[{"text": "S", "confidence": 0.5}]])
+        mock_tess_result = MagicMock()
+        mock_tess_result.is_ok.return_value = True
+        mock_tess_result.unwrap.return_value = VALID_LINE1 + "\n" + VALID_LINE2
+
+        with (
+            patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True),
+            patch("guestfill_ocr.ocr.ocr_selector._run_single_candidate_ocr") as mock_run,
+            patch("guestfill_ocr.ocr.ocr_selector._select_from_candidates") as mock_select,
+        ):
+            mock_select.side_effect = [
+                (None, []),
+                (candidate, []),
+            ]
+
+            def fake_run(cand, timeout, use_paddleocr, **_kwargs):
+                if use_paddleocr:
+                    cand.raw_text = "SHORT_TEXT"
+                    cand.cleaned_lines = ["SHORT"]
+                    return True
+                cand.raw_text = VALID_LINE1 + "\n" + VALID_LINE2
+                cand.cleaned_lines = [VALID_LINE1, VALID_LINE2]
+                return True
+
+            mock_run.side_effect = fake_run
+
+            best, warnings, engine = select_best_candidate_with_engine([candidate], timeout=8, prefer_paddleocr=True)
+            assert best is not None
+            assert len(best.cleaned_lines) >= 2
+            assert "PADDLE_OCR_POOR_RESULT" in warnings
+
+    def test_full_paddleocr_to_excel_flow(self) -> None:
+        """End-to-end: PaddleOCR result -> parse -> validate -> guest row -> confidence."""
+        from guestfill_ocr.extraction.confidence_engine import (
+            calculate_passport_confidence,
+            get_confidence_level,
+        )
+        from guestfill_ocr.extraction.field_extractor import build_guest_row
+        from guestfill_ocr.extraction.warning_engine import collect_warnings
+        from guestfill_ocr.passport.mrz_parser import parse_mrz_lines
+        from guestfill_ocr.passport.mrz_repair import try_repair_mrz
+
+        candidate = OcrCandidate(
+            image=np.zeros((100, 100, 3), dtype=np.uint8),
+            psm=6,
+            preprocessing="grayscale",
+            crop_source="test",
+        )
+        mock_paddle_result = MagicMock()
+        mock_paddle_result.is_ok.return_value = True
+        mock_paddle_result.unwrap.return_value = (
+            [VALID_LINE1, VALID_LINE2],
+            [[{"text": ln, "confidence": 0.95}] for ln in [VALID_LINE1, VALID_LINE2]],
+        )
+
+        with (
+            patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True),
+            patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", return_value=mock_paddle_result),
+            patch("guestfill_ocr.ocr.ocr_selector._select_from_candidates") as mock_select,
+        ):
+            candidate.cleaned_lines = [VALID_LINE1, VALID_LINE2]
+            mock_select.return_value = (candidate, [])
+
+            best, _warnings, engine = select_best_candidate_with_engine([candidate], timeout=8, prefer_paddleocr=True)
+            assert best is not None
+            assert engine == "paddleocr"
+
+            line1 = best.cleaned_lines[0]
+            line2 = best.cleaned_lines[1]
+            repaired, repair_warnings = try_repair_mrz(line1, line2)
+            line1, line2 = repaired[0], repaired[1]
+
+            mrz_fields = parse_mrz_lines(line1, line2)
+            check_digits = mrz_fields.get("check_digits", {})
+
+            assert mrz_fields["surname"] == "TAEST"
+            assert mrz_fields["passport_number"] == "AB123456"
+            assert check_digits["overall_valid"] is True
+
+            warnings = collect_warnings(
+                classification={"document_type": "PASSPORT"},
+                quality={"quality_ok": True},
+                mrz_lines=[line1, line2],
+                check_digits=check_digits,
+                fields=mrz_fields,
+                repair_warnings=repair_warnings,
+                visual_used=False,
+                engine_warnings=[],
+            )
+
+            lines_valid = all(len(ln) == 44 for ln in [line1, line2])
+            confidence = calculate_passport_confidence(
+                has_mrz=True,
+                lines_valid=lines_valid,
+                check_digits=check_digits,
+                image_quality={"quality_ok": True},
+                warnings=warnings,
+                repair_used=bool(repair_warnings),
+                visual_used=False,
+                engine_used="paddleocr",
+            )
+
+            assert confidence >= 0.90
+            assert get_confidence_level(confidence) == "HIGH"
+
+            guest_row = build_guest_row(source_file="test.jpg", mrz_fields=mrz_fields)
+            assert guest_row["document_type"] == "PASSPORT"
+            assert guest_row["passport_number"] == "AB123456"
+            assert guest_row["full_name"] != ""
+            assert guest_row["status"] in ("READY", "NEED_REVIEW")

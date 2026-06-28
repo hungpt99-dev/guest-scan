@@ -12,7 +12,7 @@ The workflow:
 ## Tech Stack
 
 - **Desktop:** Tauri + React + TypeScript + Vite + Tailwind CSS
-- **OCR Worker:** Python (OpenCV, Tesseract)
+- **OCR Worker:** Python (OpenCV, PaddleOCR primary, Tesseract fallback)
 - **Browser Extension:** Chrome/Edge extension (early stage)
 - **Quality:** ESLint, Prettier, commitlint, lefthook, ruff, mypy, pytest
 

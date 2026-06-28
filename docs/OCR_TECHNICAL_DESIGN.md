@@ -1,8 +1,8 @@
 # OCR Technical Design
 
-> **Status: Implemented**
+> **Status: Implemented (PaddleOCR primary, Tesseract fallback)**
 
-This document describes the OCR worker architecture, image processing pipeline, Tesseract integration, and data extraction strategies.
+This document describes the OCR worker architecture, image processing pipeline, PaddleOCR (primary) and Tesseract (fallback) engine integration, and data extraction strategies.
 
 ## Architecture
 
@@ -13,11 +13,11 @@ guestfill_ocr/
   cli/              CLI argument parsing, request/response/progress I/O
   config/           Default configuration, country codes, document rules
   input/            File discovery, validation, PDF rendering
-  image/            Image loading, preprocessing, quality analysis, cropping
+  image/            Image loading, preprocessing, quality analysis, cropping, PaddleOCR preprocess
   classification/   Document type detection (passport, ID card)
   passport/         MRZ crop, OCR, cleaning, parsing, validation, repair, visual fallback
   id_card/          ID card detection, OCR, QR/barcode reading, field parsing
-  ocr/              Tesseract engine wrapper, candidate scoring and selection
+  ocr/              PaddleOCR engine wrapper, Tesseract engine wrapper, candidate scoring and selection
   extraction/       Field normalization, validation, confidence engine, warning engine
   excel/            Excel export with Guests, Errors, Instructions, Diagnostics sheets
   pipeline/         Job runner, batch processor, document processor, result builder
@@ -41,12 +41,14 @@ guestfill_ocr/
 5. Document type classification
 6. Passport MRZ pipeline:
    - MRZ candidate generation (bottom crops, morphological band detection)
-   - Tesseract OCR with character whitelist
-   - Candidate scoring and selection
+   - PaddleOCR as primary OCR engine with multi-language support (17 languages)
+   - Multi-language fallback: tries multilingual model first, then specific country languages
+   - Tesseract OCR as fallback when PaddleOCR is unavailable or produces poor results
+   - Candidate scoring and selection with PaddleOCR confidence bonus
    - MRZ line finding and cleaning
-   - MRZ parsing (TD3 format)
-   - Check digit validation
-   - Safe MRZ repair
+   - MRZ parsing (TD3, TD2, TD1 formats)
+   - Check digit validation (passport number, DOB, expiry, optional, final composite)
+   - Safe MRZ repair using check digit verification
    - Field extraction
 7. Passport visual OCR fallback (when MRZ fails)
 8. ID card OCR pipeline (when ID card detected)

@@ -23,6 +23,7 @@ from guestfill_ocr.ocr.ocr_selector import (
     check_paddleocr_available,
     select_best_candidate_with_engine,
 )
+from guestfill_ocr.ocr.paddleocr_engine import SUPPORTED_PPOCR_LANGS
 from guestfill_ocr.passport.mrz_cropper import generate_all_candidates
 from guestfill_ocr.passport.mrz_parser import parse_mrz_lines
 from guestfill_ocr.passport.mrz_repair import try_repair_mrz
@@ -76,8 +77,12 @@ def process_document(file_path: str, options: dict) -> Result:
             for c in mrz_candidates
         ]
         candidates = generate_ocr_candidates(ocr_candidate_inputs)
+        paddle_languages: list[str] = ["ml"]
+        paddle_languages.extend(lang for lang in SUPPORTED_PPOCR_LANGS if lang != "ml")
         best_candidate, candidate_warnings, engine_used = select_best_candidate_with_engine(
-            candidates, timeout=options.get("perCandidateTimeoutSeconds", 8)
+            candidates,
+            timeout=options.get("perCandidateTimeoutSeconds", 8),
+            languages=paddle_languages if paddle_avail else None,
         )
 
         if best_candidate and len(best_candidate.cleaned_lines) >= 2:
