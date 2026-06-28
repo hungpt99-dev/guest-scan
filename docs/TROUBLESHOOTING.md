@@ -45,6 +45,25 @@
 
 **Solution:** Reinstall GuestFill. If using the portable version, make sure the `tesseract/` folder is in the same directory as the OCR worker.
 
+## Low Accuracy Warning on Copy
+
+**Error:** A field shows a low accuracy warning when trying to copy.
+
+**Causes:**
+
+- Field value has suspicious format (e.g., name contains only digits)
+- Passport/ID number doesn't match expected patterns
+- Date is outside reasonable range or document has expired
+- Gender value is unusual
+- Nationality and issuing country don't match
+
+**Solutions:**
+
+- Manually verify the field value against the original document
+- Edit the value in the Excel file and re-import
+- If the value is correct, use copy anyway by confirming the warning
+- Re-run OCR with a better quality image
+
 ## Auto Save Skipped
 
 **Error:** Auto Save was skipped.

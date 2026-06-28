@@ -7,7 +7,7 @@ The workflow:
 1. **OCR** — Scan passport/ID images and PDFs via a Python OCR worker
 2. **Review** — Review and correct extracted data in the desktop UI
 3. **Export** — Produce a reviewed Excel file
-4. **Auto-fill** — Use the reviewed Excel to automatically fill hotel system forms
+4. **Auto-fill** — Use the reviewed Excel to fill hotel system forms with accuracy-aware copy and confidence checks
 
 ## Tech Stack
 
@@ -70,9 +70,9 @@ pnpm secrets:scan     # Scan for secrets and .env files
 
 ## Current Status
 
-Active development with **220+ tests**:
+Active development with **410+ tests**:
 
-- **TypeScript (160+ tests):** Vitest unit + E2E integration tests covering Result type, file utilities, masking, date formatting, transform engine, safety engine, template manager, copy assistant, fill store, settings persistence, OCR job lifecycle, diagnostics, browser extension messaging, and full import-to-fill workflow pipelines
-- **Python (101 tests):** Pytest unit + E2E integration tests covering MRZ parsing, check digit validation, MRZ repair, confidence scoring, field normalization, Excel export with all sheets, and full end-to-end OCR-to-Excel pipeline
+- **TypeScript (310+ tests):** Vitest unit + E2E integration tests across 21 test files covering Result type, file utilities, masking, date formatting, transform engine (32 tests), safety engine with accuracy scoring (73 tests), template manager, copy assistant, fill store, fill workflow, Excel import/validation, settings persistence, OCR job lifecycle, diagnostics, browser extension messaging, and full import-to-fill E2E pipeline (30 tests)
+- **Python (101 tests):** Pytest unit + E2E integration tests across 14 test files covering MRZ parsing, check digit validation, MRZ repair, confidence scoring, field normalization, Excel export with all sheets, and full end-to-end OCR-to-Excel pipeline
 
 See `docs/CHANGELOG.md` for version history.

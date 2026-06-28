@@ -33,7 +33,9 @@ GuestFill uses a two-module architecture connected by a shared Excel review work
 
 - UI screens for OCR, Excel review, and Auto-fill
 - Rust commands for file system access, clipboard, and process management
-- Local settings stored as JSON
+- Settings persisted to IndexedDB (Tauri and browser fallback)
+- Accuracy-aware safety engine and Copy Assistant for data validation before fill
+- Fill constants module (`fillConstants.ts`) with centralized field definitions, keyboard shortcuts, and error codes
 
 ### OCR Worker (Python)
 

@@ -43,6 +43,12 @@
 - [ ] Manual Save is default
 - [ ] Auto Save disabled by default
 - [ ] Auto Save safety checks work
+- [ ] Accuracy-aware copy warnings display correctly
+- [ ] Low confidence field copy is blocked with warning
+- [ ] Field accuracy validation works for all field types
+- [ ] Expired document detection works
+- [ ] Nationality/issuing country consistency check works
+- [ ] Strip and phone_format transforms work in templates
 
 ## Security Verification
 

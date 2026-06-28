@@ -36,8 +36,12 @@ GuestFill helps hotels convert passport/ID documents into reviewed Excel data, t
 ## Step 4: Use Copy Assistant
 
 1. In the Guest List, click **Fill** next to a guest.
-2. The Fill Assistant shows all fields for that guest.
+2. The Fill Assistant shows all fields for that guest, each annotated with an accuracy indicator:
+   - **HIGH** (green) — data is reliable, safe to copy
+   - **MEDIUM** (yellow) — review before copying
+   - **LOW** (red) — data may be inaccurate, verify manually
 3. Click **Copy** next to any field to copy it to clipboard.
+   - Fields with LOW accuracy show a warning before copying
 4. Use **← Prev Field** / **Next Field →** to navigate fields.
 5. Use **← Prev** / **Next →** to navigate between guests.
 6. Paste the copied values into your hotel system.
