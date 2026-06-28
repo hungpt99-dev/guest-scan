@@ -30,6 +30,17 @@ from guestfill_ocr.passport.mrz_repair import try_repair_mrz
 from guestfill_ocr.passport.passport_visual_ocr import run_passport_visual_ocr
 
 
+def _build_paddle_languages(options: dict) -> list[str]:
+    requested = options.get("paddleOcrLanguages")
+    if requested and isinstance(requested, list) and len(requested) > 0:
+        valid = [lang for lang in requested if lang in SUPPORTED_PPOCR_LANGS]
+        if valid:
+            return valid
+    languages = ["ml"]
+    languages.extend(lang for lang in SUPPORTED_PPOCR_LANGS if lang != "ml")
+    return languages
+
+
 def process_document(file_path: str, options: dict) -> Result:
     timer = Timer()
     timer.start()
@@ -60,6 +71,7 @@ def process_document(file_path: str, options: dict) -> Result:
     if doc_type == "PASSPORT":
         prefer_paddle = options.get("preferPaddleocr", True)
         paddle_avail = prefer_paddle and check_paddleocr_available()
+        paddle_upscale = options.get("paddleUpscale", 1.5)
         if paddle_avail:
             processed = preprocess_for_paddleocr(image)
             processed_gray = to_grayscale(processed)
@@ -77,11 +89,11 @@ def process_document(file_path: str, options: dict) -> Result:
             for c in mrz_candidates
         ]
         candidates = generate_ocr_candidates(ocr_candidate_inputs)
-        paddle_languages: list[str] = ["ml"]
-        paddle_languages.extend(lang for lang in SUPPORTED_PPOCR_LANGS if lang != "ml")
+        paddle_languages = _build_paddle_languages(options)
         best_candidate, candidate_warnings, engine_used = select_best_candidate_with_engine(
             candidates,
             timeout=options.get("perCandidateTimeoutSeconds", 8),
+            paddle_upscale=paddle_upscale,
             languages=paddle_languages if paddle_avail else None,
         )
 

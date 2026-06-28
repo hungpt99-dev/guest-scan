@@ -5,8 +5,13 @@ Integrates PaddleOCR confidence into candidate scoring for
 higher accuracy on global passport documents.
 """
 
+import re
+
 from guestfill_ocr.ocr.ocr_candidate import OcrCandidate
 from guestfill_ocr.ocr.paddleocr_engine import (
+    MRZ_TD1_LENGTH,
+    MRZ_TD2_LENGTH,
+    MRZ_TD3_LENGTH,
     check_paddleocr_available,
     compute_average_confidence,
     run_paddleocr_mrz_with_details,
@@ -14,6 +19,96 @@ from guestfill_ocr.ocr.paddleocr_engine import (
 from guestfill_ocr.ocr.tesseract_engine import run_mrz_ocr
 from guestfill_ocr.passport.mrz_cleaner import clean_mrz_text
 from guestfill_ocr.passport.mrz_validator import validate_check_digit
+
+
+def _score_line_length(lines: list[str]) -> float:
+    score = 0.0
+    if not lines:
+        return 0.0
+    if len(lines[0]) == MRZ_TD3_LENGTH:
+        score += 40.0
+    elif len(lines[0]) == MRZ_TD2_LENGTH:
+        score += 35.0
+    elif len(lines[0]) == MRZ_TD1_LENGTH:
+        score += 30.0
+    if len(lines) >= 2:
+        second_len = len(lines[1])
+        if second_len == MRZ_TD3_LENGTH:
+            score += 40.0
+        elif second_len == MRZ_TD2_LENGTH:
+            score += 35.0
+        elif second_len == MRZ_TD1_LENGTH:
+            score += 30.0
+    if len(lines) >= 3 and len(lines[2]) == MRZ_TD1_LENGTH:
+        score += 25.0
+    return score
+
+
+def _score_td3_check_digits(line2: str) -> float:
+    if len(line2) < MRZ_TD3_LENGTH:
+        return 0.0
+    score = 0.0
+    passport_num = line2[0:9]
+    passport_cd = line2[9:10]
+    if validate_check_digit(passport_num, passport_cd):
+        score += 100.0
+    dob = line2[13:19]
+    dob_cd = line2[19:20]
+    if validate_check_digit(dob, dob_cd):
+        score += 100.0
+    expiry = line2[21:27]
+    expiry_cd = line2[27:28]
+    if validate_check_digit(expiry, expiry_cd):
+        score += 100.0
+    composite_input = line2[0:10] + line2[13:20] + line2[21:43]
+    composite_cd = line2[43:44]
+    if validate_check_digit(composite_input, composite_cd):
+        score += 200.0
+    if re.search(r"\d{6}", line2[13:20]):
+        score += 20.0
+    return score
+
+
+def _score_td1_check_digits(line2: str) -> float:
+    if len(line2) < MRZ_TD1_LENGTH:
+        return 0.0
+    score = 0.0
+    passport_num = line2[0:9]
+    passport_cd = line2[9:10]
+    if validate_check_digit(passport_num, passport_cd):
+        score += 100.0
+    dob = line2[13:19]
+    dob_cd = line2[19:20]
+    if validate_check_digit(dob, dob_cd):
+        score += 100.0
+    expiry = line2[21:27]
+    expiry_cd = line2[27:28]
+    if validate_check_digit(expiry, expiry_cd):
+        score += 100.0
+    if re.search(r"\d{6}", line2[13:20]):
+        score += 20.0
+    return score
+
+
+def _score_td2_check_digits(line2: str) -> float:
+    if len(line2) < MRZ_TD2_LENGTH:
+        return 0.0
+    score = 0.0
+    passport_num = line2[0:9]
+    passport_cd = line2[9:10]
+    if validate_check_digit(passport_num, passport_cd):
+        score += 100.0
+    dob = line2[13:19]
+    dob_cd = line2[19:20]
+    if validate_check_digit(dob, dob_cd):
+        score += 100.0
+    expiry = line2[21:27]
+    expiry_cd = line2[27:28]
+    if validate_check_digit(expiry, expiry_cd):
+        score += 100.0
+    if re.search(r"\d{6}", line2[13:20]):
+        score += 20.0
+    return score
 
 
 def score_candidate(candidate: OcrCandidate, line1: str | None, line2: str | None) -> float:
@@ -26,47 +121,18 @@ def score_candidate(candidate: OcrCandidate, line1: str | None, line2: str | Non
     if len(lines) >= 2:
         score += 80.0
 
-    if lines:
-        if len(lines[0]) == 44:
-            score += 40.0
-        if len(lines) >= 2 and len(lines[1]) == 44:
-            score += 40.0
+    score += _score_line_length(lines)
 
     if line1 and line1.count("<") >= 5:
         score += 10.0
 
     if line2:
-        if len(line2) >= 10:
-            passport_num = line2[0:9]
-            passport_cd = line2[9:10]
-            if validate_check_digit(passport_num, passport_cd):
-                score += 100.0
-
-        if len(line2) >= 20:
-            dob = line2[13:19]
-            dob_cd = line2[19:20]
-            if validate_check_digit(dob, dob_cd):
-                score += 100.0
-
-        if len(line2) >= 28:
-            expiry = line2[21:27]
-            expiry_cd = line2[27:28]
-            if validate_check_digit(expiry, expiry_cd):
-                score += 100.0
-
-        if len(line2) >= 44:
-            composite_input = line2[0:10] + line2[13:20] + line2[21:43]
-            composite_cd = line2[43:44]
-            if validate_check_digit(composite_input, composite_cd):
-                score += 200.0
-
-    import re
-
-    if line2 and re.search(r"\d{6}", line2[13:20]):
-        score += 20.0
-
-    if len(lines) >= 2 and len(lines[0]) == 44 and len(lines[1]) == 44:
-        score += 40.0
+        if len(line2) == MRZ_TD3_LENGTH:
+            score += _score_td3_check_digits(line2)
+        elif len(line2) == MRZ_TD2_LENGTH:
+            score += _score_td2_check_digits(line2)
+        elif len(line2) == MRZ_TD1_LENGTH:
+            score += _score_td1_check_digits(line2)
 
     invalid_chars = sum(1 for line in lines for ch in line if ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
     if invalid_chars > 10:
@@ -208,12 +274,8 @@ def _try_multi_lang_candidates(
     best_score_val = float("-inf")
     best_lang = languages[0]
 
-    for lang in languages:
-        for candidate in candidates:
-            candidate.raw_text = ""
-            candidate.cleaned_lines = []
-            candidate.ocr_confidence = None
-
+    for candidate in candidates:
+        for lang in languages:
             result = run_paddleocr_mrz_with_details(
                 candidate.image, timeout=timeout, lang=lang, upscale_factor=upscale_factor
             )
@@ -239,10 +301,6 @@ def _try_multi_lang_candidates(
                         best_score_val = temp.score
                         best_overall = temp
                         best_lang = lang
-                        break
-
-            if best_overall:
-                break
 
     if best_overall:
         for c in candidates:

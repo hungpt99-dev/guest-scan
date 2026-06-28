@@ -770,3 +770,113 @@ class TestMultiLangPaddleOcrInstance:
         from guestfill_ocr.ocr.paddleocr_engine import _PPOCR_INSTANCES
 
         assert len(_PPOCR_INSTANCES) == 0
+
+
+class TestGpuDetection:
+    def test_returns_false_when_paddle_not_installed(self) -> None:
+        with patch.dict("sys.modules", {"paddle": None}):
+            from guestfill_ocr.ocr.paddleocr_engine import check_paddleocr_has_gpu
+
+            result = check_paddleocr_has_gpu()
+            assert result is False
+
+    def test_caches_result(self) -> None:
+        from guestfill_ocr.ocr.paddleocr_engine import check_paddleocr_has_gpu
+
+        with patch("guestfill_ocr.ocr.paddleocr_engine._PPOCR_HAS_GPU", True):
+            assert check_paddleocr_has_gpu() is True
+
+
+class TestPrepareImage:
+    def test_returns_error_for_invalid_type(self) -> None:
+        from guestfill_ocr.ocr.paddleocr_engine import _prepare_image
+
+        result = _prepare_image(12345)
+        assert result.is_err()
+        assert "Invalid image type" in result.unwrap_err().message
+
+    def test_returns_error_for_nonexistent_path(self) -> None:
+        from guestfill_ocr.ocr.paddleocr_engine import _prepare_image
+
+        result = _prepare_image("/nonexistent/path.jpg")
+        assert result.is_err()
+        assert "Cannot read image" in result.unwrap_err().message
+
+
+class TestEnhancedUpsideDownDetection:
+    def test_empty_lines(self) -> None:
+        from guestfill_ocr.ocr.paddleocr_engine import _try_detect_upside_down
+
+        assert _try_detect_upside_down([]) is False
+
+    def test_digits_at_start_strong_hint(self) -> None:
+        from guestfill_ocr.ocr.paddleocr_engine import _try_detect_upside_down
+
+        lines = ["12345ABC<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<", "67890DEF<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<"]
+        assert _try_detect_upside_down(lines) is True
+
+    def test_no_hints_returns_false(self) -> None:
+        from guestfill_ocr.ocr.paddleocr_engine import _try_detect_upside_down
+
+        lines = ["P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<", "AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02"]
+        assert _try_detect_upside_down(lines) is False
+
+
+class TestEnhancedMrzLikelihood:
+    def test_td3_format_scores_higher_than_td1(self) -> None:
+        from guestfill_ocr.ocr.paddleocr_engine import MRZ_TD1_LENGTH, MRZ_TD3_LENGTH, _score_mrz_likelihood
+
+        td3_line = "P" + "<" * (MRZ_TD3_LENGTH - 1)
+        td1_line = "P" + "<" * (MRZ_TD1_LENGTH - 1)
+        td3_score = _score_mrz_likelihood(td3_line)
+        td1_score = _score_mrz_likelihood(td1_line)
+        assert td3_score > td1_score
+
+    def test_vnm_passport_line1_scores_high(self) -> None:
+        from guestfill_ocr.ocr.paddleocr_engine import _score_mrz_likelihood
+
+        line = "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<"
+        assert _score_mrz_likelihood(line) > 50.0
+
+    def test_short_text_zero(self) -> None:
+        from guestfill_ocr.ocr.paddleocr_engine import _score_mrz_likelihood
+
+        assert _score_mrz_likelihood("SHORT") == 0.0
+
+
+class TestRunPaddleOcrMrzTimeout:
+    def test_timeout_error_handling(self) -> None:
+        with patch("guestfill_ocr.ocr.paddleocr_engine.check_paddleocr_available", return_value=True):
+            with patch("guestfill_ocr.ocr.paddleocr_engine._get_paddleocr_instance") as mock_get:
+                mock_instance = mock_get.return_value
+                mock_instance.ocr.side_effect = TimeoutError("Simulated timeout")
+                result = run_paddleocr_mrz(np.zeros((100, 100, 3), dtype=np.uint8), timeout=5)
+                assert result.is_err()
+
+    def test_handles_cv2_error_gracefully(self) -> None:
+        with patch("guestfill_ocr.ocr.paddleocr_engine.check_paddleocr_available", return_value=True):
+            with patch("guestfill_ocr.ocr.paddleocr_engine._get_paddleocr_instance") as mock_get:
+                mock_instance = mock_get.return_value
+                mock_instance.ocr.side_effect = RuntimeError("Simulated cv2 error")
+                result = run_paddleocr_mrz(np.zeros((100, 100, 3), dtype=np.uint8), timeout=5)
+                assert result.is_err()
+
+
+class TestExtractMrzTextEdgeCases:
+    def test_returns_empty_for_lines_with_only_noise(self) -> None:
+        noise_lines = ["a" for _ in range(5)]
+        result = [[([[0, i], [30, i], [30, i + 10], [0, i + 10]], (line, 0.5)) for i, line in enumerate(noise_lines)]]
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
+        assert len(texts) == 0
+
+    def test_single_good_mrz_line(self) -> None:
+        line = "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<"
+        result = [[([[0, 0], [44, 0], [44, 10], [0, 10]], (line, 0.95))]]
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
+        assert len(texts) >= 1
+
+    def test_returns_empty_for_short_lines(self) -> None:
+        short_lines = ["AB", "CD", "EF"]
+        result = [[([[0, i], [10, i], [10, i + 10], [0, i + 10]], (line, 0.9)) for i, line in enumerate(short_lines)]]
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
+        assert len(texts) == 0

@@ -443,6 +443,51 @@ class TestMultiLangIntegration:
                 assert engine == "tesseract"
 
 
+class TestScoreCandidateEnhanced:
+    def test_td1_format_scores(self) -> None:
+        from guestfill_ocr.ocr.ocr_selector import score_candidate
+
+        td1_line1 = ("I<UTOTEST<<SURNAME<<GIVEN<<NA" + "<" * 30)[:30]
+        assert len(td1_line1) == 30, f"Expected 30, got {len(td1_line1)}"
+        td1_line2 = ("AB123456<7UTO7501012F2501017" + "<" * 30)[:30]
+        assert len(td1_line2) == 30, f"Expected 30, got {len(td1_line2)}"
+        candidate = _make_candidate()
+        candidate.cleaned_lines = [td1_line1, td1_line2]
+        score = score_candidate(candidate, td1_line1, td1_line2)
+        assert score > 0
+
+    def test_td2_format_scores(self) -> None:
+        from guestfill_ocr.ocr.ocr_selector import score_candidate
+
+        td2_line1 = ("P<UTOTEST<<SURNAME<<GIVEN" + "<" * 36)[:36]
+        assert len(td2_line1) == 36, f"Expected 36, got {len(td2_line1)}"
+        td2_line2 = ("AB123456<7UTO7501012F2501017" + "<" * 36)[:36]
+        assert len(td2_line2) == 36, f"Expected 36, got {len(td2_line2)}"
+        candidate = _make_candidate()
+        candidate.cleaned_lines = [td2_line1, td2_line2]
+        score = score_candidate(candidate, td2_line1, td2_line2)
+        assert score > 0
+
+    def test_line_length_scoring_prefers_td3(self) -> None:
+        from guestfill_ocr.ocr.ocr_selector import _score_line_length
+
+        lines_44 = ["P" + "<" * 43, "A" + "<" * 43]
+        lines_36 = ["P" + "<" * 35, "A" + "<" * 35]
+        lines_30 = ["P" + "<" * 29, "A" + "<" * 29]
+        score_44 = _score_line_length(lines_44)
+        score_36 = _score_line_length(lines_36)
+        score_30 = _score_line_length(lines_30)
+        assert score_44 > score_36
+        assert score_36 > score_30
+
+    def test_three_td1_lines_adds_bonus(self) -> None:
+        from guestfill_ocr.ocr.ocr_selector import _score_line_length
+
+        lines = ["A" + "<" * 29, "B" + "<" * 29, "C" + "<" * 29]
+        score = _score_line_length(lines)
+        assert score > 0
+
+
 class TestTryMultiLangCandidates:
     def test_returns_none_when_all_languages_fail(self) -> None:
         mock_result = MagicMock()
@@ -468,7 +513,6 @@ class TestTryMultiLangCandidates:
         poor_result = MagicMock()
         poor_result.is_ok.return_value = True
         poor_result.unwrap.return_value = (["SHORT"], [[{"text": "S", "confidence": 0.5}]])
-
         call_count = [0]
 
         def mock_run_paddle(*args, **kwargs):
@@ -479,3 +523,60 @@ class TestTryMultiLangCandidates:
             result, warnings, engine = _try_multi_lang_candidates([candidate], ["en", "ml"], 8, 1.5)
             assert result is not None
             assert engine == "paddleocr"
+
+    def test_tries_all_languages_not_stopping_early(self) -> None:
+        from unittest.mock import MagicMock
+
+        candidate = _make_candidate()
+        call_count = [0]
+
+        def mock_run(*args, **kwargs):
+            call_count[0] += 1
+            mock_r = MagicMock()
+            mock_r.is_ok.return_value = False
+            return mock_r
+
+        with patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", side_effect=mock_run):
+            result, _warnings, engine = _try_multi_lang_candidates([candidate], ["ml", "en", "fr"], 8, 1.5)
+            assert result is None
+            assert engine == "tesseract"
+            assert call_count[0] == 3
+
+    def test_selects_best_candidate_across_multiple(self) -> None:
+        from unittest.mock import MagicMock
+
+        good_candidate = _make_candidate(text="GOOD")
+        poor_candidate = _make_candidate(text="POOR")
+        good_lines = [
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<",
+            "AB123456<4VNM7501012M2501017<<<<<<<<<<<<<<02",
+        ]
+        good_result = MagicMock()
+        good_result.is_ok.return_value = True
+        good_result.unwrap.return_value = (good_lines, [[{"text": "P<", "confidence": 0.95}]])
+        poor_result = MagicMock()
+        poor_result.is_ok.return_value = True
+        poor_result.unwrap.return_value = (["SHORT"], [[{"text": "S", "confidence": 0.5}]])
+        call_order = iter(
+            [
+                poor_result,
+                poor_result,
+                poor_result,
+                poor_result,
+                poor_result,
+                good_result,
+                poor_result,
+                poor_result,
+            ]
+        )
+
+        def mock_run(*_args, **_kwargs):
+            return next(call_order)
+
+        with patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", side_effect=mock_run):
+            result, _warnings, engine = _try_multi_lang_candidates(
+                [poor_candidate, good_candidate], ["ml", "en", "fr"], 8, 1.5
+            )
+            assert result is not None
+            assert engine == "paddleocr"
+            assert len(result.cleaned_lines) >= 2
