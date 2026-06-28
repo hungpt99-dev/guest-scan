@@ -4,6 +4,9 @@ import {
   checkTemplateMatch,
   checkAutoSaveSafety,
   checkMappedValuesExist,
+  checkConfidence,
+  checkFieldAccuracy,
+  getFieldAccuracyInfo,
 } from "../../../features/fill/safetyEngine";
 import type { GuestRow, TargetSystemTemplate } from "@guestfill/shared";
 
@@ -198,6 +201,113 @@ describe("safetyEngine", () => {
       const guest = createGuest({ fullName: "" });
       const result = checkMappedValuesExist(guest, template);
       expect(result.passed).toBe(true);
+    });
+  });
+
+  describe("checkConfidence", () => {
+    it("passes for high confidence guest", () => {
+      const guest = createGuest({ confidenceScore: 0.95, confidenceLevel: "HIGH" });
+      const result = checkConfidence(guest);
+      expect(result.passed).toBe(true);
+    });
+
+    it("fails for low confidence guest", () => {
+      const guest = createGuest({ confidenceScore: 0.45, confidenceLevel: "LOW" });
+      const result = checkConfidence(guest);
+      expect(result.passed).toBe(false);
+    });
+
+    it("fails for medium confidence guest", () => {
+      const guest = createGuest({ confidenceScore: 0.75, confidenceLevel: "MEDIUM" });
+      const result = checkConfidence(guest);
+      expect(result.passed).toBe(false);
+    });
+
+    it("fails for guest with no confidence data", () => {
+      const guest = createGuest({ confidenceScore: undefined, confidenceLevel: undefined });
+      const result = checkConfidence(guest);
+      expect(result.passed).toBe(false);
+      expect(result.checks.find((c) => c.name === "high_confidence")?.passed).toBe(false);
+    });
+  });
+
+  describe("checkFieldAccuracy", () => {
+    it("passes for a valid guest with clean data", () => {
+      const guest = createGuest();
+      const result = checkFieldAccuracy(guest);
+      expect(result.passed).toBe(true);
+    });
+
+    it("fails for guest with short name", () => {
+      const guest = createGuest({ fullName: "A" });
+      const result = checkFieldAccuracy(guest);
+      expect(result.passed).toBe(false);
+      expect(result.checks.find((c) => c.name === "field_fullName_length")?.passed).toBe(false);
+    });
+
+    it("fails for guest with digits-only name", () => {
+      const guest = createGuest({ fullName: "12345" });
+      const result = checkFieldAccuracy(guest);
+      expect(result.passed).toBe(false);
+      expect(result.checks.find((c) => c.name === "field_fullName_digits")?.passed).toBe(false);
+    });
+
+    it("fails for guest with invalid passport number format", () => {
+      const guest = createGuest({ passportNumber: "!@#$%" });
+      const result = checkFieldAccuracy(guest);
+      expect(result.passed).toBe(false);
+    });
+
+    it("fails for zero-filled passport number", () => {
+      const guest = createGuest({ passportNumber: "00000000" });
+      const result = checkFieldAccuracy(guest);
+      expect(result.passed).toBe(false);
+      expect(result.checks.find((c) => c.name === "field_passportNumber_zeros")?.passed).toBe(false);
+    });
+
+    it("fails for future date of birth", () => {
+      const guest = createGuest({ dateOfBirth: "2099-01-01" });
+      const result = checkFieldAccuracy(guest);
+      expect(result.passed).toBe(false);
+    });
+
+    it("fails for expired passport", () => {
+      const guest = createGuest({ passportExpiryDate: "2020-01-01" });
+      const result = checkFieldAccuracy(guest);
+      expect(result.passed).toBe(false);
+      expect(result.checks.find((c) => c.name === "field_passportExpiryDate_expired")?.passed).toBe(false);
+    });
+
+    it("flags nationality/issuing country mismatch", () => {
+      const guest = createGuest({ nationality: "VN", issuingCountry: "CN" });
+      const result = checkFieldAccuracy(guest);
+      expect(result.checks.find((c) => c.name === "field_nationality_consistency")?.passed).toBe(false);
+    });
+
+    it("passes for valid ID card guest", () => {
+      const guest = createGuest({ documentType: "ID_CARD", passportNumber: undefined, idNumber: "ID123456789" });
+      const result = checkFieldAccuracy(guest);
+      expect(result.passed).toBe(true);
+    });
+  });
+
+  describe("getFieldAccuracyInfo", () => {
+    it("returns accuracy info for multiple fields", () => {
+      const guest = createGuest();
+      const info = getFieldAccuracyInfo(guest);
+      expect(info.length).toBeGreaterThanOrEqual(3);
+      const nameInfo = info.find((i) => i.field === "fullName");
+      expect(nameInfo).toBeDefined();
+      expect(nameInfo?.level).toBe("HIGH");
+    });
+
+    it("returns LOW accuracy for problematic data", () => {
+      const guest = createGuest({ fullName: "12", passportNumber: "0000", gender: "UNKNOWN" });
+      const info = getFieldAccuracyInfo(guest);
+      const nameInfo = info.find((i) => i.field === "fullName");
+      expect(nameInfo?.level).toBe("LOW");
+      const passportInfo = info.find((i) => i.field === "passportNumber");
+      expect(passportInfo?.level).toBe("LOW");
     });
   });
 });

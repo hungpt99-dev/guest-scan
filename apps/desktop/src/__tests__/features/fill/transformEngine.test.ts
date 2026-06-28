@@ -7,6 +7,102 @@ const UnknownRule = { type: "unknown" } as any;
 
 describe("transformEngine", () => {
   describe("applyTransforms", () => {
+    describe("date_format additional conversions", () => {
+      it("converts dd/MM/yyyy to yyyy-MM-dd", () => {
+        const rules: TransformRule[] = [{ type: "date_format", from: "dd/MM/yyyy", to: "yyyy-MM-dd" }];
+        expect(applyTransforms("15/06/2025", rules)).toBe("2025-06-15");
+      });
+
+      it("converts MM/dd/yyyy to yyyy-MM-dd", () => {
+        const rules: TransformRule[] = [{ type: "date_format", from: "MM/dd/yyyy", to: "yyyy-MM-dd" }];
+        expect(applyTransforms("06/15/2025", rules)).toBe("2025-06-15");
+      });
+
+      it("converts dd/MM/yyyy to MM/dd/yyyy", () => {
+        const rules: TransformRule[] = [{ type: "date_format", from: "dd/MM/yyyy", to: "MM/dd/yyyy" }];
+        expect(applyTransforms("15/06/2025", rules)).toBe("06/15/2025");
+      });
+
+      it("converts yyyyMMdd to dd/MM/yyyy", () => {
+        const rules: TransformRule[] = [{ type: "date_format", from: "yyyyMMdd", to: "dd/MM/yyyy" }];
+        expect(applyTransforms("20250615", rules)).toBe("15/06/2025");
+      });
+
+      it("converts yyyyMMdd to yyyy-MM-dd", () => {
+        const rules: TransformRule[] = [{ type: "date_format", from: "yyyyMMdd", to: "yyyy-MM-dd" }];
+        expect(applyTransforms("20250615", rules)).toBe("2025-06-15");
+      });
+
+      it("auto-detects compact format to yyyy-MM-dd", () => {
+        const rules: TransformRule[] = [{ type: "date_format", to: "yyyy-MM-dd" }];
+        expect(applyTransforms("20250615", rules)).toBe("2025-06-15");
+      });
+    });
+
+    describe("strip transform", () => {
+      it("removes non-alphanumeric characters by default", () => {
+        const rules: TransformRule[] = [{ type: "strip" }];
+        expect(applyTransforms("AB-123 456!", rules)).toBe("AB123456");
+      });
+
+      it("removes specified characters", () => {
+        const rules: TransformRule[] = [{ type: "strip", chars: "- " }];
+        expect(applyTransforms("AB-123 456", rules)).toBe("AB123456");
+      });
+
+      it("handles empty input", () => {
+        const rules: TransformRule[] = [{ type: "strip" }];
+        expect(applyTransforms("", rules)).toBe("");
+      });
+    });
+
+    describe("phone_format transform", () => {
+      it("formats as local (last 10 digits)", () => {
+        const rules: TransformRule[] = [{ type: "phone_format", format: "local" }];
+        expect(applyTransforms("0123456789", rules)).toBe("0123456789");
+      });
+
+      it("strips to 10 digits for local format from longer number", () => {
+        const rules: TransformRule[] = [{ type: "phone_format", format: "local" }];
+        expect(applyTransforms("+84 123 456 789", rules)).toBe("4123456789");
+      });
+
+      it("formats as international with default country code", () => {
+        const rules: TransformRule[] = [{ type: "phone_format", format: "international" }];
+        expect(applyTransforms("0123456789", rules)).toBe("+84123456789");
+      });
+    });
+
+    describe("country_format NAME", () => {
+      it("converts ISO3 to country name", () => {
+        const rules: TransformRule[] = [{ type: "country_format", format: "NAME" }];
+        expect(applyTransforms("VNM", rules)).toBe("Vietnam");
+        expect(applyTransforms("USA", rules)).toBe("United States");
+        expect(applyTransforms("JPN", rules)).toBe("Japan");
+      });
+
+      it("converts ISO2 to country name via ISO3", () => {
+        const rules: TransformRule[] = [{ type: "country_format", format: "NAME" }];
+        expect(applyTransforms("VN", rules)).toBe("Vietnam");
+        expect(applyTransforms("JP", rules)).toBe("Japan");
+      });
+
+      it("returns unknown codes unchanged", () => {
+        const rules: TransformRule[] = [{ type: "country_format", format: "NAME" }];
+        expect(applyTransforms("XXX", rules)).toBe("XXX");
+      });
+    });
+
+    describe("country_format ISO3 expanded", () => {
+      it("converts additional country codes", () => {
+        const rules: TransformRule[] = [{ type: "country_format", format: "ISO3" }];
+        expect(applyTransforms("BR", rules)).toBe("BRA");
+        expect(applyTransforms("IN", rules)).toBe("IND");
+        expect(applyTransforms("RU", rules)).toBe("RUS");
+        expect(applyTransforms("TH", rules)).toBe("THA");
+        expect(applyTransforms("SG", rules)).toBe("SGP");
+      });
+    });
     it("applies trim transform", () => {
       const rules: TransformRule[] = [{ type: "trim" }];
       expect(applyTransforms("  hello  ", rules)).toBe("hello");

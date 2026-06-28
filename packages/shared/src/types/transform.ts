@@ -9,4 +9,6 @@ export type TransformRule =
   | { type: "replace"; from: string; to: string }
   | { type: "prefix"; value: string }
   | { type: "suffix"; value: string }
-  | { type: "custom_mapping"; mapping: Record<string, string> };
+  | { type: "custom_mapping"; mapping: Record<string, string> }
+  | { type: "strip"; chars?: string }
+  | { type: "phone_format"; format: "local" | "international"; countryCode?: string };

@@ -1,8 +1,20 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { GuestRow, TargetSystemTemplate } from "@guestfill/shared";
 import { applyTransforms } from "../../../features/fill/transformEngine";
-import { checkGuestRow, checkAutoSaveSafety } from "../../../features/fill/safetyEngine";
-import { getFieldValue, getFieldsInOrder, navigateField, navigateGuest } from "../../../features/fill/copyAssistant";
+import {
+  checkGuestRow,
+  checkAutoSaveSafety,
+  checkConfidence,
+  checkFieldAccuracy,
+} from "../../../features/fill/safetyEngine";
+import {
+  getFieldValue,
+  getFieldsInOrder,
+  navigateField,
+  navigateGuest,
+  getAccuracySummary,
+  getFieldAccuracyLevel,
+} from "../../../features/fill/copyAssistant";
 import { createDefaultTemplate } from "../../../features/fill/templateManager";
 
 describe("Fill Workflow Integration", () => {
@@ -168,6 +180,53 @@ describe("Fill Workflow Integration", () => {
     expect(idx).toBe(0);
     idx = navigateGuest(idx, totalGuests, "prev");
     expect(idx).toBe(0);
+  });
+
+  it("gates filling on confidence score", () => {
+    const highConf: GuestRow = { ...guest, confidenceScore: 0.95, confidenceLevel: "HIGH" };
+    expect(checkConfidence(highConf).passed).toBe(true);
+
+    const lowConf: GuestRow = { ...guest, confidenceScore: 0.35, confidenceLevel: "LOW" };
+    expect(checkConfidence(lowConf).passed).toBe(false);
+  });
+
+  it("requires field accuracy for safe filling", () => {
+    const validGuest: GuestRow = { ...guest, fullName: "John Doe", passportNumber: "AB123456" };
+    expect(checkFieldAccuracy(validGuest).passed).toBe(true);
+
+    const invalidGuest: GuestRow = { ...guest, fullName: "A", passportNumber: "0" };
+    expect(checkFieldAccuracy(invalidGuest).passed).toBe(false);
+  });
+
+  it("provides accuracy summary for workflow decisions", () => {
+    const goodGuest: GuestRow = { ...guest, confidenceScore: 0.95, confidenceLevel: "HIGH" };
+    const summary = getAccuracySummary(goodGuest);
+    expect(summary.totalFields).toBeGreaterThan(0);
+    expect(summary.warnings.length).toBe(0);
+
+    const badGuest: GuestRow = {
+      ...guest,
+      fullName: "A",
+      passportNumber: "0000",
+      gender: "UNKNOWN",
+      confidenceScore: 0.3,
+      confidenceLevel: "LOW",
+    };
+    const badSummary = getAccuracySummary(badGuest);
+    expect(badSummary.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("gets per-field accuracy level", () => {
+    const result = getFieldAccuracyLevel(guest, "fullName");
+    expect(result.level).toBe("HIGH");
+    expect(result.score).toBe(1.0);
+  });
+
+  it("includes accuracy info in field listing", () => {
+    const fields = getFieldsInOrder(guest);
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields[0]?.accuracyLevel).toBeDefined();
+    expect(fields[0]?.accuracyScore).toBeDefined();
   });
 
   it("applies full pipeline: import -> normalize -> validate -> fill", () => {

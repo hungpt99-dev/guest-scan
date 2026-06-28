@@ -68,11 +68,19 @@ This document describes the Auto-fill module architecture, Excel import, Copy As
 - Provides field navigation (next/prev)
 - Provides guest navigation (next/prev)
 - Logs copy events to fill_events store
+- **Accuracy-aware copy** (`copyFieldWithWarning`): pre-checks field accuracy before allowing copy, returns warning if accuracy <70%
+- **Per-field accuracy** (`getFieldAccuracyLevel`): returns accuracy level, score, and issues for a specific field
+- **Accuracy summary** (`getAccuracySummary`): aggregates per-field accuracy into total/high/low counts with actionable warnings
+- **Accuracy in field listing** (`getFieldsInOrder`): each field now includes `accuracyLevel` and `accuracyScore` for UI rendering
 
 ### Transform Engine (`features/fill/transformEngine.ts`)
 
-- Supports: trim, uppercase, lowercase, titlecase, date_format, gender_format, country_format, replace, prefix, suffix, custom_mapping
-- Tested with 12+ transformation rule types
+- Supports: trim, uppercase, lowercase, titlecase, date_format, gender_format, country_format, replace, prefix, suffix, custom_mapping, strip, phone_format
+- **Date formats**: yyyy-MM-dd ↔ dd/MM/yyyy, yyyy-MM-dd ↔ MM/dd/yyyy, dd/MM/yyyy ↔ MM/dd/yyyy, yyyyMMdd → dd/MM/yyyy/yyyy-MM-dd, auto-detect compact to target format
+- **Strip**: removes non-alphanumeric characters (configurable character set)
+- **Phone format**: formats phone numbers as local (last 10 digits) or international (+country code)
+- **Country format expansion**: 60+ ISO2↔ISO3 mappings, ISO3 → country name via `NAME` format
+- Tested with 20+ transformation rule types
 
 ### Safety Engine (`features/fill/safetyEngine.ts`)
 
@@ -80,6 +88,9 @@ This document describes the Auto-fill module architecture, Excel import, Copy As
 - Template match: URL pattern, window title, mapped fields exist
 - Auto Save safety: template configured, selector exists, required values present
 - Runtime field value checks against required mapped fields
+- **Confidence check** (`checkConfidence`): gates on `confidenceScore`/`confidenceLevel` — HIGH (≥0.90) passes, MEDIUM and LOW fail with percentage warnings
+- **Field accuracy check** (`checkFieldAccuracy`): validates field formats — name length, passport/ID format, date validity/range, gender values, nationality/issuing country consistency, expired document detection
+- **Per-field accuracy info** (`getFieldAccuracyInfo`): returns `AccuracyInfo[]` with per-field `level` (HIGH/MEDIUM/LOW), `score` (0.0–1.0), and `issues[]` for UI rendering
 
 ### Template Manager (`features/fill/templateManager.ts`)
 

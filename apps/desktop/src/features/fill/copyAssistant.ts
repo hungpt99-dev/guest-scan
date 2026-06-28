@@ -1,6 +1,7 @@
-import type { GuestRow, FillEvent } from "@guestfill/shared";
+import type { GuestRow, FillEvent, ConfidenceLevel } from "@guestfill/shared";
 import { DEFAULT_FIELD_ORDER } from "./fillConstants";
 import { saveFillEvent } from "./fillStore";
+import { getFieldAccuracyInfo } from "./safetyEngine";
 
 export async function copyField(guest: GuestRow, fieldName: string): Promise<boolean> {
   const value = (guest as Record<string, unknown>)[fieldName];
@@ -37,6 +38,48 @@ export async function copyField(guest: GuestRow, fieldName: string): Promise<boo
   }
 }
 
+export function copyFieldWithWarning(guest: GuestRow, fieldName: string): { success: boolean; warning?: string } {
+  const accuracyInfo = getFieldAccuracyInfo(guest);
+  const fieldAccuracy = accuracyInfo.find((a) => a.field === fieldName);
+  if (fieldAccuracy && fieldAccuracy.score < 0.7) {
+    return {
+      success: false,
+      warning: `Low accuracy (${(fieldAccuracy.score * 100).toFixed(0)}%): ${fieldAccuracy.issues.join(", ")}`,
+    };
+  }
+  return { success: true };
+}
+
+export function getFieldAccuracyLevel(
+  guest: GuestRow,
+  fieldName: string,
+): { level: string; score: number; issues: string[] } {
+  const accuracyInfo = getFieldAccuracyInfo(guest);
+  const fieldAccuracy = accuracyInfo.find((a) => a.field === fieldName);
+  if (fieldAccuracy) {
+    return { level: fieldAccuracy.level, score: fieldAccuracy.score, issues: fieldAccuracy.issues };
+  }
+  return { level: "HIGH", score: 1.0, issues: [] };
+}
+
+export function getAccuracySummary(guest: GuestRow): {
+  totalFields: number;
+  highConfidence: number;
+  lowConfidence: number;
+  warnings: string[];
+} {
+  const accuracies = getFieldAccuracyInfo(guest);
+  const highConfidence = accuracies.filter((a) => a.level === "HIGH").length;
+  const lowConfidence = accuracies.filter((a) => a.level === "LOW").length;
+  const warnings = accuracies.flatMap((a) => a.issues.map((i) => `${a.field}: ${i}`));
+  return {
+    totalFields: accuracies.length,
+    highConfidence,
+    lowConfidence,
+    warnings,
+  };
+}
+
 export function getFieldValue(guest: GuestRow, fieldName: string): string {
   const value = (guest as Record<string, unknown>)[fieldName];
   if (value === undefined || value === null) return "";
@@ -46,7 +89,7 @@ export function getFieldValue(guest: GuestRow, fieldName: string): string {
 export function getFieldsInOrder(
   guest: GuestRow,
   fieldOrder?: string[],
-): Array<{ key: string; label: string; value: string }> {
+): Array<{ key: string; label: string; value: string; accuracyLevel: ConfidenceLevel; accuracyScore: number }> {
   const order = fieldOrder ?? DEFAULT_FIELD_ORDER;
   const labelMap: Record<string, string> = {
     fullName: "Full Name",
@@ -68,13 +111,20 @@ export function getFieldsInOrder(
     reservationCode: "Reservation Code",
     note: "Note",
   };
+  const accuracies = getFieldAccuracyInfo(guest);
+  const accuracyMap = new Map(accuracies.map((a) => [a.field, { level: a.level, score: a.score }]));
   return order
     .filter((key) => key in guest)
-    .map((key) => ({
-      key,
-      label: labelMap[key] ?? key,
-      value: getFieldValue(guest, key),
-    }));
+    .map((key) => {
+      const acc = accuracyMap.get(key);
+      return {
+        key,
+        label: labelMap[key] ?? key,
+        value: getFieldValue(guest, key),
+        accuracyLevel: acc?.level ?? "HIGH",
+        accuracyScore: acc?.score ?? 1.0,
+      };
+    });
 }
 
 export function navigateField(currentIndex: number, totalFields: number, direction: "next" | "prev"): number {

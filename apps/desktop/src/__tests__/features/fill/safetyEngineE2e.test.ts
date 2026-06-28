@@ -6,6 +6,9 @@ import {
   checkTemplateMatch,
   checkAutoSaveSafety,
   checkMappedValuesExist,
+  checkConfidence,
+  checkFieldAccuracy,
+  getFieldAccuracyInfo,
 } from "../../../features/fill/safetyEngine";
 import { createDefaultTemplate } from "../../../features/fill/templateManager";
 
@@ -248,6 +251,106 @@ describe("Safety Engine + Transform E2E: full pipeline", () => {
       ];
       const guest = makeGuest({ fullName: "Alice", passportNumber: "" });
       expect(checkMappedValuesExist(guest, tpl).passed).toBe(true);
+    });
+  });
+
+  describe("confidence and accuracy pipeline", () => {
+    it("rejects filling for low confidence guest", () => {
+      const guest = makeGuest({ confidenceScore: 0.35, confidenceLevel: "LOW" });
+      const confResult = checkConfidence(guest);
+      expect(confResult.passed).toBe(false);
+      expect(confResult.checks.find((c) => c.name === "high_confidence")?.message).toContain("35%");
+    });
+
+    it("passes high confidence guest through safety checks", () => {
+      const guest = makeGuest({ confidenceScore: 0.95, confidenceLevel: "HIGH" });
+      const confResult = checkConfidence(guest);
+      expect(confResult.passed).toBe(true);
+      const rowResult = checkGuestRow(guest);
+      expect(rowResult.passed).toBe(true);
+    });
+
+    it("detects field accuracy issues for low quality data", () => {
+      const guest = makeGuest({
+        fullName: "12",
+        passportNumber: "00000000",
+        dateOfBirth: "2099-99-99",
+      });
+      const accResult = checkFieldAccuracy(guest);
+      expect(accResult.passed).toBe(false);
+      const digitsCheck = accResult.checks.find((c) => c.name === "field_fullName_digits");
+      expect(digitsCheck?.passed).toBe(false);
+    });
+
+    it("generates per-field accuracy info with scores", () => {
+      const guest = makeGuest({
+        fullName: "Alice",
+        passportNumber: "AB123456",
+        gender: "F",
+        nationality: "US",
+        confidenceScore: 0.92,
+        confidenceLevel: "HIGH",
+      });
+      const info = getFieldAccuracyInfo(guest);
+      expect(info.length).toBeGreaterThanOrEqual(3);
+      for (const item of info) {
+        expect(item.score).toBeGreaterThanOrEqual(0);
+        expect(["HIGH", "MEDIUM", "LOW"]).toContain(item.level);
+      }
+    });
+
+    it("full accuracy pipeline: confidence + field accuracy + guest validation", () => {
+      const goodGuest = makeGuest({
+        fullName: "Valid Name",
+        passportNumber: "XY999999",
+        dateOfBirth: "1990-06-15",
+        gender: "M",
+        nationality: "US",
+        confidenceScore: 0.95,
+        confidenceLevel: "HIGH",
+      });
+
+      expect(checkConfidence(goodGuest).passed).toBe(true);
+      expect(checkFieldAccuracy(goodGuest).passed).toBe(true);
+      expect(checkGuestRow(goodGuest).passed).toBe(true);
+
+      const badGuest = makeGuest({
+        fullName: "A",
+        passportNumber: "0",
+        dateOfBirth: "2099-99-99",
+        gender: "UNKNOWN",
+        confidenceScore: 0.25,
+        confidenceLevel: "LOW",
+      });
+
+      expect(checkConfidence(badGuest).passed).toBe(false);
+      expect(checkFieldAccuracy(badGuest).passed).toBe(false);
+      expect(checkGuestRow(badGuest).passed).toBe(true);
+    });
+
+    it("accuracy info surfaces actionable warnings", () => {
+      const guest = makeGuest({
+        fullName: "1",
+        passportNumber: "00000000",
+        nationality: "VN",
+        issuingCountry: "CN",
+      });
+      const info = getFieldAccuracyInfo(guest);
+      const nameIssues = info.find((i) => i.field === "fullName")?.issues;
+      expect(nameIssues?.length).toBeGreaterThan(0);
+      const passportIssues = info.find((i) => i.field === "passportNumber")?.issues;
+      expect(passportIssues?.some((s) => s.toLowerCase().includes("zero"))).toBe(true);
+    });
+
+    it("extends safety checks with accuracy in auto-save flow", () => {
+      const template = makeTemplate({ saveMode: "auto", autoSaveSelector: "#save-btn" });
+      const lowConfGuest = makeGuest({ confidenceScore: 0.3, confidenceLevel: "LOW" });
+
+      const autoSaveResult = checkAutoSaveSafety(template, lowConfGuest);
+      const confResult = checkConfidence(lowConfGuest);
+
+      expect(confResult.passed).toBe(false);
+      expect(autoSaveResult.passed).toBe(true);
     });
   });
 

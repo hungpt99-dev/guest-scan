@@ -2,8 +2,20 @@ import { describe, it, expect } from "vitest";
 import type { GuestRow } from "@guestfill/shared";
 import { validateGuestRow } from "../../../features/excel/excelValidation";
 import { applyTransforms } from "../../../features/fill/transformEngine";
-import { checkGuestRow, checkMappedValuesExist } from "../../../features/fill/safetyEngine";
-import { getFieldValue, getFieldsInOrder, navigateField, navigateGuest } from "../../../features/fill/copyAssistant";
+import {
+  checkGuestRow,
+  checkMappedValuesExist,
+  checkConfidence,
+  checkFieldAccuracy,
+} from "../../../features/fill/safetyEngine";
+import {
+  getFieldValue,
+  getFieldsInOrder,
+  navigateField,
+  navigateGuest,
+  getAccuracySummary,
+  getFieldAccuracyLevel,
+} from "../../../features/fill/copyAssistant";
 import {
   createDefaultTemplate,
   exportTemplateAsJson,
@@ -126,7 +138,66 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
     });
   });
 
-  describe("Phase 3: Safety Validation", () => {
+  describe("Phase 3: Accuracy and Confidence Validation", () => {
+    it("rejects filling for medium/low confidence guests", () => {
+      const high = createSampleGuest({ confidenceScore: 0.95, confidenceLevel: "HIGH" });
+      expect(checkConfidence(high).passed).toBe(true);
+
+      const medium = createSampleGuest({ confidenceScore: 0.75, confidenceLevel: "MEDIUM" });
+      expect(checkConfidence(medium).passed).toBe(false);
+
+      const low = createSampleGuest({ confidenceScore: 0.35, confidenceLevel: "LOW" });
+      expect(checkConfidence(low).passed).toBe(false);
+    });
+
+    it("validates field-level accuracy on guest data", () => {
+      const valid = createSampleGuest();
+      expect(checkFieldAccuracy(valid).passed).toBe(true);
+
+      const invalidName = createSampleGuest({ fullName: "A" });
+      expect(checkFieldAccuracy(invalidName).passed).toBe(false);
+
+      const invalidPassport = createSampleGuest({ passportNumber: "00000000" });
+      const accResult = checkFieldAccuracy(invalidPassport);
+      expect(accResult.passed).toBe(false);
+      expect(accResult.checks.find((c) => c.name === "field_passportNumber_zeros")?.passed).toBe(false);
+    });
+
+    it("generates accuracy summary with actionable warnings", () => {
+      const guest = createSampleGuest({
+        fullName: "A",
+        passportNumber: "0000",
+        dateOfBirth: "2099-99-99",
+        gender: "UNKNOWN",
+        nationality: "VN",
+        issuingCountry: "CN",
+        confidenceScore: 0.3,
+        confidenceLevel: "LOW",
+      });
+      const summary = getAccuracySummary(guest);
+      expect(summary.warnings.length).toBeGreaterThan(0);
+      expect(summary.lowConfidence).toBeGreaterThan(0);
+    });
+
+    it("provides per-field accuracy levels for UI rendering", () => {
+      const guest = createSampleGuest({
+        fullName: "Jane Smith",
+        passportNumber: "AB123456",
+        confidenceScore: 0.95,
+        confidenceLevel: "HIGH",
+      });
+      const fields = getFieldsInOrder(guest);
+      for (const field of fields) {
+        expect(field.accuracyLevel).toBeDefined();
+        expect(field.accuracyScore).toBeDefined();
+      }
+      const nameLevel = getFieldAccuracyLevel(guest, "fullName");
+      expect(nameLevel.level).toBe("HIGH");
+      expect(nameLevel.score).toBe(1.0);
+    });
+  });
+
+  describe("Phase 4: Safety Validation", () => {
     it("validates guest is safe to fill with all required fields", () => {
       const guest = createSampleGuest();
       const safetyCheck = checkGuestRow(guest);
@@ -160,7 +231,7 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
     });
   });
 
-  describe("Phase 4: Fill Assistant Workflow", () => {
+  describe("Phase 5: Fill Assistant Workflow", () => {
     it("retrieves fields in correct display order", () => {
       const guest = createSampleGuest();
       const fields = getFieldsInOrder(guest);
@@ -210,7 +281,7 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
     });
   });
 
-  describe("Phase 5: Multi-Guest Workflow", () => {
+  describe("Phase 6: Multi-Guest Workflow", () => {
     it("processes multiple guests through the full pipeline", () => {
       const guests = [
         createSampleGuest({ id: "g1", fullName: "Alice", nationality: "US", gender: "F", dateOfBirth: "1990-01-15" }),
@@ -252,7 +323,7 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
     });
   });
 
-  describe("Phase 6: Template Management in Pipeline", () => {
+  describe("Phase 7: Template Management in Pipeline", () => {
     it("creates template, uses it, exports and re-imports it", () => {
       const tpl = createDefaultTemplate("E2E PMS");
       tpl.mappings = [
@@ -282,7 +353,7 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
     });
   });
 
-  describe("Phase 7: Error Codes and Constants Coverage", () => {
+  describe("Phase 8: Error Codes and Constants Coverage", () => {
     it("defines all error codes used in the pipeline", () => {
       expect(ERROR_CODES.EXCEL_IMPORT_FAILED).toBe("EXCEL_IMPORT_FAILED");
       expect(ERROR_CODES.MISSING_REQUIRED_COLUMN).toBe("MISSING_REQUIRED_COLUMN");
@@ -312,7 +383,7 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
     });
   });
 
-  describe("Phase 8: End-to-End Guest Workflow Simulation", () => {
+  describe("Phase 9: End-to-End Guest Workflow Simulation", () => {
     it("completes full fill cycle for a single guest", () => {
       const guest = createSampleGuest();
 
