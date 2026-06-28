@@ -25,7 +25,7 @@ from guestfill_ocr.ocr.ocr_selector import (
 )
 from guestfill_ocr.ocr.paddleocr_engine import SUPPORTED_PPOCR_LANGS
 from guestfill_ocr.passport.mrz_cropper import generate_all_candidates
-from guestfill_ocr.passport.mrz_parser import parse_mrz_lines
+from guestfill_ocr.passport.mrz_parser import detect_mrz_format, parse_mrz_lines
 from guestfill_ocr.passport.mrz_repair import try_repair_mrz
 from guestfill_ocr.passport.passport_visual_ocr import run_passport_visual_ocr
 
@@ -89,10 +89,23 @@ def process_document(file_path: str, options: dict) -> Result:
             raw_lines = best_candidate.cleaned_lines
             line1 = raw_lines[0] if len(raw_lines) >= 1 else ""
             line2 = raw_lines[1] if len(raw_lines) >= 2 else ""
-            repaired_lines, repair_warnings = try_repair_mrz(line1, line2)
-            line1, line2 = repaired_lines[0], repaired_lines[1]
-            mrz_lines = [line1, line2]
-            mrz_fields = parse_mrz_lines(line1, line2)
+            line3 = raw_lines[2] if len(raw_lines) >= 3 else None
+
+            repaired = try_repair_mrz(line1, line2, line3)
+            repaired_lines, repair_warnings = repaired
+
+            line1 = repaired_lines[0] if len(repaired_lines) >= 1 else ""
+            line2 = repaired_lines[1] if len(repaired_lines) >= 2 else ""
+            line3 = repaired_lines[2] if len(repaired_lines) >= 3 else None
+
+            mrz_lines = [ln for ln in [line1, line2, line3] if ln]
+
+            format_type = detect_mrz_format(line1, line2, line3)
+            if format_type == "TD1" and line3:
+                mrz_fields = parse_mrz_lines(line1, line2, line3)
+            else:
+                mrz_fields = parse_mrz_lines(line1, line2)
+
             check_digits = mrz_fields.get("check_digits", {})
             has_valid_content = bool(mrz_fields.get("surname") or mrz_fields.get("passport_number"))
             if has_valid_content:
@@ -147,7 +160,7 @@ def process_document(file_path: str, options: dict) -> Result:
             qr_conflict=False,
         )
     elif has_mrz:
-        lines_valid = len(mrz_lines) >= 2 and all(len(ln) == 44 for ln in mrz_lines)
+        lines_valid = len(mrz_lines) >= 2 and all(len(ln) in (30, 36, 44) for ln in mrz_lines)
         confidence_score = calculate_passport_confidence(
             has_mrz=has_mrz,
             lines_valid=lines_valid,
