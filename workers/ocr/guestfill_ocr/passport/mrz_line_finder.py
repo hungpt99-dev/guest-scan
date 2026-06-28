@@ -1,5 +1,7 @@
 """Find MRZ lines from cleaned OCR text."""
 
+import re
+
 from guestfill_ocr.passport.mrz_cleaner import clean_mrz_text, is_mrz_line
 
 TARGET_LINE_LENGTH = 44
@@ -8,7 +10,7 @@ ALLOWED_LENGTH_VARIATION = 2
 
 def find_mrz_lines(raw_text: str) -> list[str]:
     cleaned = clean_mrz_text(raw_text)
-    mrz_like = [l for l in cleaned if is_mrz_line(l)]
+    mrz_like = [ln for ln in cleaned if is_mrz_line(ln)]
     if not mrz_like:
         return []
     scored: list[tuple[float, list[str]]] = []
@@ -55,6 +57,3 @@ def _length_score(line: str) -> float:
     if diff <= ALLOWED_LENGTH_VARIATION:
         return 20.0
     return max(0.0, 20.0 - diff * 5)
-
-
-import re

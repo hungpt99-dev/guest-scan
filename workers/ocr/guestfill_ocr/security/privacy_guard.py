@@ -11,10 +11,7 @@ SENSITIVE_PATTERNS = [
 
 
 def contains_sensitive_data(text: str) -> bool:
-    for pattern in SENSITIVE_PATTERNS:
-        if pattern.search(text):
-            return True
-    return False
+    return any(pattern.search(text) for pattern in SENSITIVE_PATTERNS)
 
 
 def strip_sensitive_data(text: str) -> str:

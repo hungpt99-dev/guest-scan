@@ -1,26 +1,26 @@
 """E2E integration tests for the full MRZ pipeline."""
 
+from guestfill_ocr.extraction.confidence_engine import (
+    calculate_id_card_confidence,
+    calculate_passport_confidence,
+    determine_status,
+    get_confidence_level,
+)
+from guestfill_ocr.extraction.field_normalizer import (
+    normalize_country,
+    normalize_date,
+    normalize_gender,
+    normalize_id_number,
+    normalize_name,
+    normalize_passport_number,
+)
 from guestfill_ocr.passport.mrz_parser import parse_mrz_lines
+from guestfill_ocr.passport.mrz_repair import try_repair_field, try_repair_mrz
 from guestfill_ocr.passport.mrz_validator import (
     char_value,
     compute_check_digit,
     validate_check_digit,
     validate_full_mrz,
-)
-from guestfill_ocr.passport.mrz_repair import try_repair_field, try_repair_mrz
-from guestfill_ocr.extraction.confidence_engine import (
-    calculate_passport_confidence,
-    calculate_id_card_confidence,
-    determine_status,
-    get_confidence_level,
-)
-from guestfill_ocr.extraction.field_normalizer import (
-    normalize_name,
-    normalize_gender,
-    normalize_date,
-    normalize_country,
-    normalize_passport_number,
-    normalize_id_number,
 )
 
 VALID_LINE1 = "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<"

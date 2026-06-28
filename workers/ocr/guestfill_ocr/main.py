@@ -14,15 +14,19 @@ def process_ocr_job(request: dict) -> Result[dict]:
     try:
         response = run_job(request)
         for error in response.get("errors", []):
-            if isinstance(error, dict) and "code" in error:
-                if error["code"] not in (
+            if (
+                isinstance(error, dict)
+                and "code" in error
+                and error["code"]
+                not in (
                     "PLACEHOLDER",
                     "NO_VALID_INPUT_FILES",
                     "OUTPUT_FILE_LOCKED",
                     "PDF_RENDER_FAILED",
                     "EXCEL_WRITE_FAILED",
-                ):
-                    pass
+                )
+            ):
+                pass
         return Ok(response)
     except PermissionError:
         error = OcrError(

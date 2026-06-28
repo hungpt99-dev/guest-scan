@@ -19,7 +19,11 @@ _FRIENDLY_ERROR_MESSAGES: dict[str, str] = {
     "IMAGE_UNREADABLE": "This image could not be opened for OCR. It may be corrupted.",
     "OCR_TIMEOUT": "OCR processing timed out for this file. It may be too complex or large.",
     "OCR_FAILED": "OCR processing failed for this file. The text could not be extracted.",
-    "TESSERACT_NOT_FOUND": "Tesseract OCR engine is not installed. Please install Tesseract (brew install tesseract on macOS, apt install tesseract-ocr on Linux) and try again.",
+    "TESSERACT_NOT_FOUND": (
+        "Tesseract OCR engine is not installed. Please install Tesseract"
+        " (brew install tesseract on macOS, apt install tesseract-ocr on Linux)"
+        " and try again."
+    ),
     "MRZ_NOT_FOUND": "No machine-readable zone (MRZ) was found in this document.",
     "MRZ_PARSE_FAILED": "The MRZ could not be parsed. The text may be damaged or incomplete.",
     "CHECK_DIGIT_FAILED": "The document number check digit failed. Please verify manually.",

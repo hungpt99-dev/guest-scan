@@ -27,5 +27,5 @@ def is_mrz_line(line: str) -> bool:
 
 def has_mrz_pattern(text: str) -> bool:
     cleaned = clean_mrz_text(text)
-    mrz_like = [l for l in cleaned if is_mrz_line(l)]
+    mrz_like = [ln for ln in cleaned if is_mrz_line(ln)]
     return len(mrz_like) >= 2

@@ -64,7 +64,7 @@ def _style_guest_sheet(ws, num_rows: int) -> None:
 
     status_col = GUEST_COLUMNS.index("status") + 1
     warning_col = GUEST_COLUMNS.index("ocr_warning") + 1
-    confidence_col = GUEST_COLUMNS.index("confidence_score") + 1
+    GUEST_COLUMNS.index("confidence_score") + 1
     confidence_level_col = GUEST_COLUMNS.index("confidence_level") + 1
 
     for row_idx in range(2, num_rows + 2):

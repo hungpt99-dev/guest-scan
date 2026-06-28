@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Generic, TypeVar, Union
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -46,4 +46,4 @@ class Err(Generic[T]):
     def unwrap_or(self, default): ...
 
 
-Result = Union[Ok, Err]
+Result = Ok | Err

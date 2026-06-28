@@ -1,5 +1,6 @@
 """Manage temporary files and directories."""
 
+import contextlib
 import shutil
 import tempfile
 from pathlib import Path
@@ -38,10 +39,8 @@ def set_cleanup(enabled: bool) -> None:
 def cleanup_temp_files() -> None:
     global _current_temp_dir, _cleanup_enabled
     if _current_temp_dir and _cleanup_enabled:
-        try:
+        with contextlib.suppress(Exception):
             shutil.rmtree(_current_temp_dir, ignore_errors=True)
-        except Exception:
-            pass
         _current_temp_dir = None
 
 

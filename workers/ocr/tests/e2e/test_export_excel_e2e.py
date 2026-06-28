@@ -3,7 +3,7 @@
 import tempfile
 from pathlib import Path
 
-from guestfill_ocr.excel.columns import GUEST_COLUMNS, ERROR_COLUMNS, DIAGNOSTIC_COLUMNS
+from guestfill_ocr.excel.columns import DIAGNOSTIC_COLUMNS, ERROR_COLUMNS, GUEST_COLUMNS
 from guestfill_ocr.excel.export_excel import export_to_excel
 
 
