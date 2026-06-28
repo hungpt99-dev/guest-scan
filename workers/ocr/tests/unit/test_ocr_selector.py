@@ -205,12 +205,126 @@ class TestPaddleOcrIntegration:
     def test_paddle_upscale_parameter_passed_through(self) -> None:
         candidate = _make_candidate()
         with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True):
-            with patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz") as mock_paddle:
+            with patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details") as mock_paddle:
                 mock_paddle.return_value.is_ok.return_value = True
                 mock_paddle.return_value.unwrap.return_value = (
-                    "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<\nAB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02"
+                    ["P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<", "AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02"],
+                    [[{"text": "P<", "confidence": 0.95}]],
                 )
                 select_best_candidate_with_engine([candidate], timeout=8, prefer_paddleocr=True, paddle_upscale=2.0)
                 assert mock_paddle.called
                 _, kwargs = mock_paddle.call_args
                 assert kwargs.get("upscale_factor") == 2.0
+
+
+class TestOcrCandidateConfidenceScoring:
+    def test_high_confidence_gets_bonus(self) -> None:
+        from guestfill_ocr.ocr.ocr_candidate import OcrCandidate
+
+        candidate = OcrCandidate(
+            image=None,
+            psm=6,
+            preprocessing="grayscale",
+            crop_source="test",
+            ocr_confidence=0.95,
+        )
+        candidate.cleaned_lines = [
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<",
+            "AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02",
+        ]
+        line1 = candidate.cleaned_lines[0]
+        line2 = candidate.cleaned_lines[1]
+        score = score_candidate(candidate, line1, line2)
+        assert score > 0
+
+    def test_null_confidence_no_bonus(self) -> None:
+        candidate = _make_candidate()
+        candidate.cleaned_lines = [
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<",
+            "AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02",
+        ]
+        line1 = candidate.cleaned_lines[0]
+        line2 = candidate.cleaned_lines[1]
+        assert candidate.ocr_confidence is None
+        score_no_conf = score_candidate(candidate, line1, line2)
+        candidate.ocr_confidence = 0.95
+        score_with_conf = score_candidate(candidate, line1, line2)
+        assert score_with_conf > score_no_conf
+
+    def test_low_confidence_gives_smaller_bonus(self) -> None:
+        candidate_low = _make_candidate()
+        candidate_low.cleaned_lines = [
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<",
+            "AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02",
+        ]
+        candidate_high = _make_candidate()
+        candidate_high.cleaned_lines = list(candidate_low.cleaned_lines)
+        candidate_low.ocr_confidence = 0.3
+        candidate_high.ocr_confidence = 0.95
+        line1 = candidate_low.cleaned_lines[0]
+        line2 = candidate_low.cleaned_lines[1]
+        score_low = score_candidate(candidate_low, line1, line2)
+        score_high = score_candidate(candidate_high, line1, line2)
+        assert score_high > score_low
+
+
+class TestMultiLangPaddleOcr:
+    def test_try_multi_lang_falls_back_to_tesseract_when_paddle_unavailable(self) -> None:
+        from guestfill_ocr.ocr.ocr_selector import try_multi_lang_paddleocr
+
+        candidate = _make_candidate()
+        with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=False):
+            with patch("guestfill_ocr.ocr.ocr_selector.run_mrz_ocr") as mock_tess:
+                mock_tess.return_value.is_ok.return_value = True
+                mock_tess.return_value.unwrap.return_value = (
+                    "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<\nAB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02"
+                )
+                result, warnings, engine = try_multi_lang_paddleocr(candidate)
+                assert engine == "tesseract"
+                assert "PADDLE_OCR_UNAVAILABLE" in warnings
+
+    def test_try_multi_lang_falls_back_on_all_fail(self) -> None:
+        from guestfill_ocr.ocr.ocr_selector import try_multi_lang_paddleocr
+
+        candidate = _make_candidate()
+        mock_result = MagicMock()
+        mock_result.is_ok.return_value = False
+        tess_result = MagicMock()
+        tess_result.is_ok.return_value = True
+        tess_result.unwrap.return_value = (
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<\nAB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02"
+        )
+        with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True):
+            with patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", return_value=mock_result):
+                with patch("guestfill_ocr.ocr.ocr_selector.run_mrz_ocr", return_value=tess_result):
+                    result, warnings, engine = try_multi_lang_paddleocr(candidate)
+                    assert engine == "tesseract"
+
+    def test_try_multi_lang_selects_best_language(self) -> None:
+        from guestfill_ocr.ocr.ocr_selector import try_multi_lang_paddleocr
+
+        candidate = _make_candidate()
+        best_lines = [
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<",
+            "AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02",
+        ]
+        best_result = MagicMock()
+        best_result.is_ok.return_value = True
+        best_result.unwrap.return_value = (best_lines, [[{"text": "P<", "confidence": 0.95}]])
+        poor_result = MagicMock()
+        poor_result.is_ok.return_value = True
+        poor_result.unwrap.return_value = (["SHORT"], [[{"text": "S", "confidence": 0.5}]])
+
+        call_count = [0]
+
+        def mock_run_paddle(*args, **kwargs):
+            call_count[0] += 1
+            return best_result if call_count[0] >= 2 else poor_result
+
+        with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True):
+            with patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", side_effect=mock_run_paddle):
+                result, warnings, engine = try_multi_lang_paddleocr(candidate, languages=["en", "ml"])
+                assert engine == "paddleocr"
+                assert result is not None
+                assert len(result.cleaned_lines) >= 2
+                assert any("PADDLE_OCR_USED" in w for w in warnings)

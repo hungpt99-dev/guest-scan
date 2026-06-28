@@ -18,7 +18,11 @@ from guestfill_ocr.ocr.paddleocr_engine import (
     _sort_group_by_x,
     _try_detect_upside_down,
     check_paddleocr_available,
+    compute_average_confidence,
+    reset_paddleocr_instance,
+    resolve_ocr_lang,
     run_paddleocr_mrz,
+    run_paddleocr_mrz_with_details,
 )
 
 
@@ -99,47 +103,47 @@ class TestSortGroupByX:
 
 class TestReconstructLine:
     def test_single_text_item(self) -> None:
-        line = _reconstruct_line([("P<VNMTAEST<<SURNAME<<", 0.95)])
+        line, _details = _reconstruct_line([("P<VNMTAEST<<SURNAME<<", 0.95)])
         assert line is not None
         assert "P<VNMTAEST" in line
 
     def test_multiple_items_concatenated(self) -> None:
-        line = _reconstruct_line([("P<VNMTAE", 0.95), ("ST<<SURNAME<<GIVEN<<<<<<", 0.92)])
+        line, _details = _reconstruct_line([("P<VNMTAE", 0.95), ("ST<<SURNAME<<GIVEN<<<<<<", 0.92)])
         assert line is not None
         assert "P<VNMTAEST<<SURNAME" in line
 
     def test_items_in_x_order(self) -> None:
         """Items should be concatenated in provided order."""
-        line = _reconstruct_line([("FIRST<<", 0.95), ("SECOND<<", 0.92)])
+        line, _details = _reconstruct_line([("FIRST<<", 0.95), ("SECOND<<", 0.92)])
         assert line is not None
         assert line == "FIRST<<SECOND<<"
 
     def test_low_confidence_filtered(self) -> None:
-        line = _reconstruct_line([("TEXT", 0.3)], confidence_threshold=0.5)
+        line, _details = _reconstruct_line([("TEXT", 0.3)], confidence_threshold=0.5)
         assert line is None
 
     def test_short_line_returns_none(self) -> None:
-        line = _reconstruct_line([("SHORT", 0.95)])
+        line, _details = _reconstruct_line([("SHORT", 0.95)])
         assert line is None
 
     def test_handles_spaces_and_tabs(self) -> None:
-        line = _reconstruct_line([("AB 123\t456<XYZ78901<<", 0.95)])
+        line, _details = _reconstruct_line([("AB 123\t456<XYZ78901<<", 0.95)])
         assert line is not None
         assert " " not in line
         assert "\t" not in line
 
     def test_uppercases_lowercase(self) -> None:
-        line = _reconstruct_line([("abc123<defGHI<<<<JKL<<", 0.95)])
+        line, _details = _reconstruct_line([("abc123<defGHI<<<<JKL<<", 0.95)])
         assert line is not None
         assert "ABC123<DEFGHI<<<<JKL<<" in line
 
     def test_removes_invalid_chars(self) -> None:
-        line = _reconstruct_line([("P<VNM!@#$%<<SURNAME<<", 0.95)])
+        line, _details = _reconstruct_line([("P<VNM!@#$%<<SURNAME<<", 0.95)])
         assert line is not None
         assert "!" not in line
 
     def test_preserves_mrz_valid_chars(self) -> None:
-        line = _reconstruct_line([("P<VNMTAEST<<SURNAME<<GIVEN<<<<<<<<<<<<", 0.95)])
+        line, _details = _reconstruct_line([("P<VNMTAEST<<SURNAME<<GIVEN<<<<<<<<<<<<", 0.95)])
         assert line is not None
         assert all(c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<" for c in line)
 
@@ -240,25 +244,28 @@ class TestScoreMrzLikelihood:
 
 class TestExtractMrzText:
     def test_empty_result(self) -> None:
-        assert _extract_mrz_text([]) == []
+        lines, _details = _extract_mrz_text([])
+        assert lines == []
 
     def test_none_regions_skipped(self) -> None:
         result = [None]
-        assert _extract_mrz_text(result) == []
+        lines, _details = _extract_mrz_text(result)
+        assert lines == []
 
     def test_low_confidence_filtered(self) -> None:
         result = [[([[0, 0], [10, 0], [10, 10], [0, 10]], ("ABC123", 0.3))]]
-        assert _extract_mrz_text(result, confidence_threshold=0.5) == []
+        lines, _details = _extract_mrz_text(result, confidence_threshold=0.5)
+        assert lines == []
 
     def test_high_confidence_included(self) -> None:
         result = [[([[0, 0], [44, 0], [44, 10], [0, 10]], ("P<VNMTAEST<<SURNAME<<GIVEN<<<<<<<<<<<<", 0.9))]]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) == 1
         assert "P<VNMTAEST" in texts[0]
 
     def test_non_mrz_text_filtered(self) -> None:
         result = [[([[0, 0], [10, 0], [10, 10], [0, 10]], ("Hello World", 0.95))]]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) == 0
 
     def test_mrz_lines_extracted(self) -> None:
@@ -268,7 +275,7 @@ class TestExtractMrzText:
                 ([[0, 10], [44, 20], [44, 30], [0, 20]], ("AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02", 0.92)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) >= 1
         assert any("P<VNMTAEST" in t for t in texts)
 
@@ -280,7 +287,7 @@ class TestExtractMrzText:
                 ([[22, 0], [44, 0], [44, 10], [22, 10]], ("ST<<SURNAME<<GIVEN<<<<", 0.92)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) >= 1
         assert "P<VNMTAEST<<SURNAME" in texts[0]
 
@@ -296,7 +303,7 @@ class TestExtractMrzText:
                 ([[0, 10], [44, 20], [44, 30], [0, 20]], (line2, 0.92)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) == 2
         assert len(texts[0]) == MRZ_TD3_LENGTH
         assert len(texts[1]) == MRZ_TD3_LENGTH
@@ -316,7 +323,7 @@ class TestExtractMrzText:
                 ([[0, 24], [30, 24], [30, 34], [0, 34]], (td1_line3, 0.88)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) == 3
         assert all(len(t) == MRZ_TD1_LENGTH for t in texts)
 
@@ -331,7 +338,7 @@ class TestExtractMrzText:
                 ([[100, 100], [200, 100], [200, 110], [100, 110]], ("UNITED STATES PASSPORT", 0.88)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) == 2
         assert all(len(t) == MRZ_TD3_LENGTH for t in texts)
 
@@ -343,7 +350,7 @@ class TestExtractMrzText:
                 ([[0, 10], [44, 20], [44, 30], [0, 20]], ("NOISY_TEXT_12345", 0.30)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) >= 1
 
 
@@ -492,7 +499,7 @@ class TestExtractMrzTextIntegration:
                 ([[0, 10], [44, 20], [44, 30], [0, 20]], (mrz_line2, 0.94)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) >= 2
 
     def test_non_mrz_text_ignored(self) -> None:
@@ -502,7 +509,7 @@ class TestExtractMrzTextIntegration:
                 ([[0, 10], [15, 10], [15, 20], [0, 20]], ("PASSPORT", 0.90)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) == 0
 
     def test_partial_mrz_still_extracted(self) -> None:
@@ -511,7 +518,7 @@ class TestExtractMrzTextIntegration:
                 ([[0, 0], [44, 0], [44, 10], [0, 10]], ("P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<", 0.95)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) >= 1
 
     def test_mrz_with_non_mrz_noise(self) -> None:
@@ -523,7 +530,7 @@ class TestExtractMrzTextIntegration:
                 ([[200, 0], [300, 0], [300, 10], [200, 10]], ("PASSPORT", 0.85)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) >= 2
 
     def test_td2_format_detected(self) -> None:
@@ -538,7 +545,7 @@ class TestExtractMrzTextIntegration:
                 ([[0, 12], [36, 12], [36, 22], [0, 22]], (td2_line2, 0.90)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) == 2
         assert all(len(t) == MRZ_TD2_LENGTH for t in texts)
 
@@ -554,7 +561,7 @@ class TestExtractMrzTextIntegration:
                 ([[0, 30], [30, 30], [30, 38], [0, 38]], (td1_line3, 0.88)),
             ]
         ]
-        texts = _extract_mrz_text(result, confidence_threshold=0.5)
+        texts, _details = _extract_mrz_text(result, confidence_threshold=0.5)
         assert len(texts) == 3
         assert all(len(t) == MRZ_TD1_LENGTH for t in texts)
 
@@ -610,3 +617,156 @@ class TestRunPaddleOcrMrzEnhanced:
                 assert "P<VNMTAEST" in text
                 assert "AB123456" in text
                 assert "UNITED" not in text
+
+
+class TestComputeAverageConfidence:
+    def test_empty_list(self) -> None:
+        assert compute_average_confidence([]) == 0.0
+
+    def test_list_without_confidence(self) -> None:
+        assert compute_average_confidence([{"text": "ABC"}]) == 0.0
+
+    def test_single_item(self) -> None:
+        result = compute_average_confidence([{"text": "ABC", "confidence": 0.95}])
+        assert result == 0.95
+
+    def test_multiple_items(self) -> None:
+        result = compute_average_confidence(
+            [
+                {"text": "ABC", "confidence": 0.95},
+                {"text": "DEF", "confidence": 0.85},
+            ]
+        )
+        import pytest
+
+        assert result == pytest.approx(0.90, rel=1e-2)
+
+    def test_ignores_none_confidence(self) -> None:
+        result = compute_average_confidence(
+            [
+                {"text": "ABC", "confidence": 0.90},
+                {"text": "DEF", "confidence": None},
+            ]
+        )
+        assert result == 0.90
+
+
+class TestResolveOcrLang:
+    def test_none_country_returns_default(self) -> None:
+        assert resolve_ocr_lang(None) == "ml"
+
+    def test_unknown_country_returns_default(self) -> None:
+        assert resolve_ocr_lang("XYZ") == "ml"
+
+    def test_china_returns_chinese(self) -> None:
+        assert resolve_ocr_lang("CHN") == "ch"
+
+    def test_japan_returns_japanese(self) -> None:
+        assert resolve_ocr_lang("JPN") == "ja"
+
+    def test_russia_returns_russian(self) -> None:
+        assert resolve_ocr_lang("RUS") == "ru"
+
+    def test_uae_returns_arabic(self) -> None:
+        assert resolve_ocr_lang("ARE") == "ar"
+
+    def test_vietnam_returns_vietnamese(self) -> None:
+        assert resolve_ocr_lang("VNM") == "vi"
+
+    def test_france_returns_french(self) -> None:
+        assert resolve_ocr_lang("FRA") == "fr"
+
+    def test_germany_returns_german(self) -> None:
+        assert resolve_ocr_lang("DEU") == "de"
+
+    def test_spain_returns_spanish(self) -> None:
+        assert resolve_ocr_lang("ESP") == "es"
+
+
+class TestRunPaddleocrMrzWithDetails:
+    def test_returns_error_when_not_available(self) -> None:
+        with patch("guestfill_ocr.ocr.paddleocr_engine.check_paddleocr_available", return_value=False):
+            result = run_paddleocr_mrz_with_details(np.zeros((100, 100), dtype=np.uint8))
+            assert result.is_err()
+            assert "PADDLEOCR_NOT_FOUND" in str(result.unwrap_err().code)
+
+    def test_returns_empty_for_no_text(self) -> None:
+        mock_ocr = MagicMock()
+        mock_ocr.ocr.return_value = None
+        with patch("guestfill_ocr.ocr.paddleocr_engine.check_paddleocr_available", return_value=True):
+            with patch("guestfill_ocr.ocr.paddleocr_engine._get_paddleocr_instance", return_value=mock_ocr):
+                result = run_paddleocr_mrz_with_details(np.zeros((100, 100, 3), dtype=np.uint8))
+                assert result.is_ok()
+                lines, details = result.unwrap()
+                assert lines == "" or lines == []
+                assert details == []
+
+    def test_extracts_lines_and_details(self) -> None:
+        fake_result = [
+            [
+                ([[0, 0], [44, 0], [44, 10], [0, 10]], ("P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<", 0.95)),
+                ([[0, 10], [44, 20], [44, 30], [0, 20]], ("AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02", 0.92)),
+            ]
+        ]
+        mock_ocr = MagicMock()
+        mock_ocr.ocr.return_value = fake_result
+        with patch("guestfill_ocr.ocr.paddleocr_engine.check_paddleocr_available", return_value=True):
+            with patch("guestfill_ocr.ocr.paddleocr_engine._get_paddleocr_instance", return_value=mock_ocr):
+                result = run_paddleocr_mrz_with_details(np.zeros((100, 100, 3), dtype=np.uint8))
+                assert result.is_ok()
+                lines, details = result.unwrap()
+                assert len(lines) >= 2
+                assert len(details) >= 2
+
+    def test_accepts_lang_parameter(self) -> None:
+        mock_ocr = MagicMock()
+        mock_ocr.ocr.return_value = None
+        with patch("guestfill_ocr.ocr.paddleocr_engine.check_paddleocr_available", return_value=True):
+            with patch("guestfill_ocr.ocr.paddleocr_engine._get_paddleocr_instance", return_value=mock_ocr):
+                result = run_paddleocr_mrz_with_details(np.zeros((100, 100, 3), dtype=np.uint8), lang="ml")
+                assert result.is_ok()
+
+
+class TestReconstructLineCharDetails:
+    def test_returns_char_details_for_single_item(self) -> None:
+        text = "P<VNMTAEST<<SURNAME<<GIVEN<<<<<<<<<<<<"
+        _line, details = _reconstruct_line([(text, 0.95)])
+        assert len(details) == 1
+        assert details[0]["text"] == text
+        assert details[0]["confidence"] == 0.95
+
+    def test_returns_char_details_for_multiple_items(self) -> None:
+        _line, details = _reconstruct_line([("P<VNSURNAME<<", 0.95), ("GIVEN<<<<<<<<", 0.92)])
+        assert len(details) == 2
+        assert details[0]["text"] == "P<VNSURNAME<<"
+
+    def test_low_confidence_item_excluded_from_details(self) -> None:
+        items = [("P<VNSURNAME<<GIVEN<<<<<<<<", 0.95), ("NOISE", 0.3)]
+        _line, details = _reconstruct_line(items, confidence_threshold=0.5)
+        assert len(details) == 1
+
+    def test_returns_empty_details_when_line_none(self) -> None:
+        _line, details = _reconstruct_line([("SHORT", 0.95)])
+        assert _line is None
+        assert details == []
+
+
+class TestMultiLangPaddleOcrInstance:
+    def test_caches_instances_per_language(self) -> None:
+        reset_paddleocr_instance()
+        from guestfill_ocr.ocr.paddleocr_engine import _PPOCR_INSTANCES
+
+        assert "ml" not in _PPOCR_INSTANCES
+        assert "en" not in _PPOCR_INSTANCES
+
+    def test_reset_single_language(self) -> None:
+        reset_paddleocr_instance(lang="ml")
+        from guestfill_ocr.ocr.paddleocr_engine import _PPOCR_INSTANCES
+
+        assert "ml" not in _PPOCR_INSTANCES
+
+    def test_reset_all_instances(self) -> None:
+        reset_paddleocr_instance()
+        from guestfill_ocr.ocr.paddleocr_engine import _PPOCR_INSTANCES
+
+        assert len(_PPOCR_INSTANCES) == 0

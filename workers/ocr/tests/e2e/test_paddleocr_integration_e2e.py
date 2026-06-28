@@ -150,15 +150,15 @@ class TestPaddleOcrFallbackScenarios:
             crop_source="test",
         )
 
-        mock_paddle_result = MagicMock()
-        mock_paddle_result.is_ok.return_value = True
-        mock_paddle_result.unwrap.return_value = ""
+        from guestfill_ocr.common.result import Ok
+
+        mock_paddle_result = Ok(([], []))
         mock_tess_result = MagicMock()
         mock_tess_result.is_ok.return_value = True
         mock_tess_result.unwrap.return_value = VALID_LINE1 + "\n" + VALID_LINE2
         with (
             patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True),
-            patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz", return_value=mock_paddle_result),
+            patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", return_value=mock_paddle_result),
             patch("guestfill_ocr.ocr.ocr_selector.run_mrz_ocr", return_value=mock_tess_result),
         ):
             best, _warnings, engine = select_best_candidate_with_engine([candidate], timeout=8, prefer_paddleocr=True)
@@ -201,7 +201,7 @@ class TestPaddleOcrFallbackScenarios:
         mock_tess_result.unwrap.return_value = VALID_LINE1 + "\n" + VALID_LINE2
         with (
             patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True),
-            patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz", return_value=mock_paddle_result),
+            patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", return_value=mock_paddle_result),
             patch("guestfill_ocr.ocr.ocr_selector.run_mrz_ocr", return_value=mock_tess_result),
         ):
             best, _warnings, engine = select_best_candidate_with_engine([candidate], timeout=8, prefer_paddleocr=True)
