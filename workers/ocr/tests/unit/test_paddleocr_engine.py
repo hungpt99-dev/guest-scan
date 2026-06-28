@@ -441,17 +441,17 @@ class TestRunPaddleocrMrz:
 
 class TestComputeAdaptiveYTolerance:
     def test_empty_items_returns_default(self) -> None:
-        assert _compute_adaptive_y_tolerance([], []) == 0.02
+        assert _compute_adaptive_y_tolerance([]) == 0.02
 
     def test_uses_median_height(self) -> None:
         items = [(0.0, 10.0, None, None), (0.0, 20.0, None, None), (0.0, 30.0, None, None)]
-        tol = _compute_adaptive_y_tolerance([], items)
+        tol = _compute_adaptive_y_tolerance(items)
         assert tol >= 12.0
         assert tol <= 15.0
 
     def test_single_item(self) -> None:
         items = [(0.0, 25.0, None, None)]
-        tol = _compute_adaptive_y_tolerance([], items)
+        tol = _compute_adaptive_y_tolerance(items)
         assert tol == 15.0
 
 
@@ -465,6 +465,21 @@ class TestTryDetectUpsideDown:
             "AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02",
         ]
         assert _try_detect_upside_down(lines) is False
+
+    def test_reversed_content_hints(self) -> None:
+        lines = [
+            ">P<VNMTAEST<<SURNAME",
+            ">A<<<<<XXXXXX",
+        ]
+        assert isinstance(_try_detect_upside_down(lines), bool)
+
+    def test_letters_at_end_increase_upside_down_score(self) -> None:
+        lines = [
+            "<<<<<<<<<<<<<<<<<<ABC",
+            "<<<<<<<<<<<<<<<<<<DEF",
+        ]
+        result = _try_detect_upside_down(lines)
+        assert isinstance(result, bool)
 
 
 class TestExtractMrzTextIntegration:

@@ -121,8 +121,7 @@ def run_paddleocr_mrz(
         return Err(OcrError("OCR_FAILED", f"PaddleOCR failed: {e}"))
 
 
-def _compute_adaptive_y_tolerance(ocr_result: list, items: list) -> float:
-    """Compute adaptive y-tolerance based on detected text sizes."""
+def _compute_adaptive_y_tolerance(items: list) -> float:
     if not items:
         return 0.02
     box_heights = [h for _, h, _, _ in items]
@@ -159,7 +158,7 @@ def _group_by_y_coordinate(
     if not items:
         return []
 
-    y_threshold = _compute_adaptive_y_tolerance(ocr_result, items)
+    y_threshold = _compute_adaptive_y_tolerance(items)
 
     items.sort(key=lambda x: x[0])
 
@@ -233,15 +232,24 @@ def _detect_mrz_format(candidates: list[str]) -> int | None:
 
 
 def _try_detect_upside_down(lines: list[str]) -> bool:
-    """Check if MRZ lines appear to be upside-down (reversed)."""
     if not lines:
         return False
+    start_prefixes = ("P<", "I<", "V<", "ID")
+    upside_down_hints = 0
+    normal_hints = 0
     for line in lines:
-        if len(line) >= 10:
-            last_chars = line[-10:].replace("<", "")
-            if len(last_chars) >= 5:
-                return False
-    return False
+        if len(line) >= 2:
+            prefix = line[:2]
+            if prefix in start_prefixes:
+                normal_hints += 1
+            if prefix[-1] == ">" and prefix[0] in ("P", "I", "V", "A", "B", "C"):
+                upside_down_hints += 1
+        if len(line) >= 5:
+            last_chars = line[-5:]
+            letter_count = sum(1 for c in last_chars if c.isalpha())
+            if letter_count >= 3:
+                upside_down_hints += 1
+    return upside_down_hints > normal_hints
 
 
 def _extract_mrz_text(

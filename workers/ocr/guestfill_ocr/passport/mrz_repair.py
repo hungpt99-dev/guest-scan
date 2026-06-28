@@ -71,10 +71,6 @@ def try_repair_mrz(line1: str, line2: str) -> tuple[list[str], list[str]]:
     if new_warnings:
         warnings.append("MRZ_REPAIRED")
         warnings.extend(new_warnings)
-    else:
-        warnings.extend(new_warnings)
+        return [line1, "".join(repaired_line2)], warnings
 
-    return ["".join(repaired_line2) if new_warnings else line2, line1] if False else [
-        line1,
-        "".join(repaired_line2),
-    ] if new_warnings else [line1, line2], warnings
+    return [line1, line2], warnings
