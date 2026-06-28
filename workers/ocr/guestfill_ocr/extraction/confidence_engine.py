@@ -9,6 +9,7 @@ def calculate_passport_confidence(
     warnings: list[str],
     repair_used: bool,
     visual_used: bool,
+    engine_used: str = "tesseract",
 ) -> float:
     score = 0.50
     if has_mrz:
@@ -29,6 +30,9 @@ def calculate_passport_confidence(
     ):
         score += 0.05
     if image_quality.get("quality_ok"):
+        score += 0.05
+
+    if engine_used == "paddleocr":
         score += 0.05
 
     important_warnings = [

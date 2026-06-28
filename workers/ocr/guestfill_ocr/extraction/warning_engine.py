@@ -12,8 +12,9 @@ def collect_warnings(
     fields: dict,
     repair_warnings: list[str],
     visual_used: bool,
+    engine_warnings: list[str] | None = None,
 ) -> list[str]:
-    warnings: list[str] = []
+    warnings: list[str] = list(engine_warnings) if engine_warnings else []
 
     if not mrz_lines or (len(mrz_lines) < 2):
         warnings.append(WC["MRZ_NOT_FOUND"])

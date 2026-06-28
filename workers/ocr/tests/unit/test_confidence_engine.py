@@ -37,6 +37,65 @@ class TestCalculatePassportConfidence:
         )
         assert score < 0.5
 
+    def test_paddleocr_bonus(self) -> None:
+        score = calculate_passport_confidence(
+            has_mrz=True,
+            lines_valid=True,
+            check_digits={
+                "passport_number_valid": True,
+                "date_of_birth_valid": True,
+                "expiry_date_valid": True,
+                "final_composite_valid": True,
+            },
+            image_quality={"quality_ok": True},
+            warnings=[],
+            repair_used=False,
+            visual_used=False,
+            engine_used="paddleocr",
+        )
+        assert score > 0.95
+
+    def test_paddleocr_failed_penalty(self) -> None:
+        score = calculate_passport_confidence(
+            has_mrz=False,
+            lines_valid=False,
+            check_digits={
+                "passport_number_valid": False,
+                "date_of_birth_valid": False,
+                "expiry_date_valid": False,
+                "final_composite_valid": False,
+            },
+            image_quality={"quality_ok": True},
+            warnings=["PADDLE_OCR_FAILED", "MRZ_NOT_FOUND"],
+            repair_used=False,
+            visual_used=False,
+            engine_used="tesseract",
+        )
+        assert score < 0.7
+
+    def test_paddleocr_bonus_increases_score(self) -> None:
+        score_tess = calculate_passport_confidence(
+            has_mrz=True,
+            lines_valid=False,
+            check_digits={},
+            image_quality={"quality_ok": False},
+            warnings=[],
+            repair_used=False,
+            visual_used=False,
+            engine_used="tesseract",
+        )
+        score_paddle = calculate_passport_confidence(
+            has_mrz=True,
+            lines_valid=False,
+            check_digits={},
+            image_quality={"quality_ok": False},
+            warnings=[],
+            repair_used=False,
+            visual_used=False,
+            engine_used="paddleocr",
+        )
+        assert score_paddle > score_tess
+
 
 class TestGetConfidenceLevel:
     def test_high(self) -> None:

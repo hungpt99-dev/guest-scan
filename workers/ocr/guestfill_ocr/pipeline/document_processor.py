@@ -14,11 +14,15 @@ from guestfill_ocr.extraction.warning_engine import collect_warnings, join_warni
 from guestfill_ocr.id_card.id_card_ocr import process_id_card
 from guestfill_ocr.image.image_loader import load_image
 from guestfill_ocr.image.orientation import fix_exif_orientation
+from guestfill_ocr.image.paddleocr_preprocess import preprocess_for_paddleocr
 from guestfill_ocr.image.preprocess import preprocess_pipeline, to_grayscale
 from guestfill_ocr.image.quality_analyzer import analyze_quality
 from guestfill_ocr.image.resize import resize_keep_ratio
 from guestfill_ocr.ocr.ocr_candidate import generate_ocr_candidates
-from guestfill_ocr.ocr.ocr_selector import select_best_candidate_with_engine
+from guestfill_ocr.ocr.ocr_selector import (
+    check_paddleocr_available,
+    select_best_candidate_with_engine,
+)
 from guestfill_ocr.passport.mrz_cropper import generate_all_candidates
 from guestfill_ocr.passport.mrz_parser import parse_mrz_lines
 from guestfill_ocr.passport.mrz_repair import try_repair_mrz
@@ -50,10 +54,18 @@ def process_document(file_path: str, options: dict) -> Result:
     has_mrz = False
     is_id_card = False
     engine_used = "tesseract"
+    candidate_warnings: list[str] = []
 
     if doc_type == "PASSPORT":
-        processed = preprocess_pipeline(gray)
-        mrz_candidates = generate_all_candidates(processed)
+        prefer_paddle = options.get("preferPaddleocr", True)
+        paddle_avail = prefer_paddle and check_paddleocr_available()
+        if paddle_avail:
+            processed = preprocess_for_paddleocr(image)
+            processed_gray = to_grayscale(processed)
+            mrz_candidates = generate_all_candidates(processed_gray)
+        else:
+            processed = preprocess_pipeline(gray)
+            mrz_candidates = generate_all_candidates(processed)
         ocr_candidate_inputs = [
             {
                 "image": c.image,
@@ -112,6 +124,7 @@ def process_document(file_path: str, options: dict) -> Result:
         fields=result_fields,
         repair_warnings=repair_warnings,
         visual_used=visual_used,
+        engine_warnings=candidate_warnings,
     )
 
     if is_id_card:
@@ -138,6 +151,7 @@ def process_document(file_path: str, options: dict) -> Result:
             warnings=warnings_list,
             repair_used=bool(repair_warnings),
             visual_used=visual_used,
+            engine_used=engine_used,
         )
     else:
         confidence_score = 0.0

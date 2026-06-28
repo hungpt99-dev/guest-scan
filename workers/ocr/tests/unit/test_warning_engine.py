@@ -29,6 +29,32 @@ class TestCollectWarnings:
         )
         assert WARNING_CODES["MRZ_NOT_FOUND"] in warnings
 
+    def test_engine_warnings_included(self) -> None:
+        warnings = collect_warnings(
+            classification={"document_type": "PASSPORT"},
+            quality={"warnings": [], "quality_ok": True},
+            mrz_lines=["line1", "line2"],
+            check_digits={},
+            fields={"full_name": "John", "passport_number": "AB123"},
+            repair_warnings=[],
+            visual_used=False,
+            engine_warnings=["PADDLE_OCR_USED"],
+        )
+        assert WARNING_CODES.get("PADDLE_OCR_USED", "PADDLE_OCR_USED") in warnings
+
+    def test_engine_warnings_empty_list(self) -> None:
+        warnings = collect_warnings(
+            classification={"document_type": "PASSPORT"},
+            quality={"warnings": [], "quality_ok": True},
+            mrz_lines=["line1", "line2"],
+            check_digits={},
+            fields={"full_name": "John", "passport_number": "AB123"},
+            repair_warnings=[],
+            visual_used=False,
+            engine_warnings=[],
+        )
+        assert "PADDLE_OCR_USED" not in warnings
+
     def test_visual_ocr(self) -> None:
         warnings = collect_warnings(
             classification={},

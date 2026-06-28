@@ -176,6 +176,32 @@ class TestPaddleOcrIntegration:
                 engine = get_select_best_candidate_engine([_make_candidate()], timeout=8)
                 assert engine == "tesseract"
 
+    def test_paddle_unavailable_emits_warning(self) -> None:
+        with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=False):
+            candidate = _make_candidate()
+            with patch("guestfill_ocr.ocr.ocr_selector._run_single_candidate_ocr", return_value=False):
+                _best, warnings, _engine = select_best_candidate_with_engine(
+                    [candidate], timeout=8, prefer_paddleocr=True
+                )
+                assert "PADDLE_OCR_UNAVAILABLE" in warnings
+
+    def test_paddle_used_emits_warning(self) -> None:
+        candidate = _make_candidate()
+        candidate.raw_text = (
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<\nAB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02"
+        )
+        candidate.cleaned_lines = [
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<",
+            "AB123456<7VNM7501018M2501019<<<<<<<<<<<<<<02",
+        ]
+        with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True):
+            with patch("guestfill_ocr.ocr.ocr_selector._run_single_candidate_ocr", return_value=True):
+                _best, warnings, engine = select_best_candidate_with_engine(
+                    [candidate], timeout=8, prefer_paddleocr=True
+                )
+                assert "PADDLE_OCR_USED" in warnings
+                assert engine == "paddleocr"
+
     def test_paddle_upscale_parameter_passed_through(self) -> None:
         candidate = _make_candidate()
         with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True):

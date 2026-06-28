@@ -136,11 +136,17 @@ def select_best_candidate_with_engine(
 
         has_paddle_result = any(c.raw_text for c in candidates)
         if has_paddle_result:
-            engine_used = "paddleocr"
+            warnings.append("PADDLE_OCR_USED")
             best_candidate, sel_warnings = _select_from_candidates(candidates)
             warnings.extend(sel_warnings)
             if best_candidate and len(best_candidate.cleaned_lines) >= 2:
+                engine_used = "paddleocr"
                 return best_candidate, warnings, engine_used
+        else:
+            warnings.append("PADDLE_OCR_FAILED")
+    else:
+        if prefer_paddleocr:
+            warnings.append("PADDLE_OCR_UNAVAILABLE")
 
     for candidate in candidates:
         if not candidate.raw_text:
