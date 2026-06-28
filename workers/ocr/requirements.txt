@@ -9,3 +9,7 @@ numpy>=1.24.0
 # pyzbar>=0.1.9            # QR/barcode reading
 # python-dateutil>=2.8.0   # Date parsing
 # pytest>=7.0.0            # Testing
+
+# PaddleOCR (primary OCR engine for MRZ extraction):
+# paddleocr>=2.8.0         # Uncomment to enable PaddleOCR
+# paddlepaddle>=2.6.0      # Required by paddleocr (use paddlepaddle for CPU)

@@ -18,7 +18,7 @@ from guestfill_ocr.image.preprocess import preprocess_pipeline, to_grayscale
 from guestfill_ocr.image.quality_analyzer import analyze_quality
 from guestfill_ocr.image.resize import resize_keep_ratio
 from guestfill_ocr.ocr.ocr_candidate import generate_ocr_candidates
-from guestfill_ocr.ocr.ocr_selector import select_best_candidate_sync
+from guestfill_ocr.ocr.ocr_selector import select_best_candidate_with_engine
 from guestfill_ocr.passport.mrz_cropper import generate_all_candidates
 from guestfill_ocr.passport.mrz_parser import parse_mrz_lines
 from guestfill_ocr.passport.mrz_repair import try_repair_mrz
@@ -49,6 +49,7 @@ def process_document(file_path: str, options: dict) -> Result:
     visual_used = False
     has_mrz = False
     is_id_card = False
+    engine_used = "tesseract"
 
     if doc_type == "PASSPORT":
         processed = preprocess_pipeline(gray)
@@ -63,7 +64,7 @@ def process_document(file_path: str, options: dict) -> Result:
             for c in mrz_candidates
         ]
         candidates = generate_ocr_candidates(ocr_candidate_inputs)
-        best_candidate, candidate_warnings = select_best_candidate_sync(
+        best_candidate, candidate_warnings, engine_used = select_best_candidate_with_engine(
             candidates, timeout=options.get("perCandidateTimeoutSeconds", 8)
         )
 
@@ -128,7 +129,7 @@ def process_document(file_path: str, options: dict) -> Result:
             qr_conflict=False,
         )
     elif has_mrz:
-        lines_valid = len(mrz_lines) >= 2 and all(len(l) == 44 for l in mrz_lines)
+        lines_valid = len(mrz_lines) >= 2 and all(len(ln) == 44 for ln in mrz_lines)
         confidence_score = calculate_passport_confidence(
             has_mrz=has_mrz,
             lines_valid=lines_valid,
@@ -163,8 +164,8 @@ def process_document(file_path: str, options: dict) -> Result:
         "blur_score": quality["blur_score"],
         "brightness": quality["brightness"],
         "contrast": quality["contrast"],
-        "selected_ocr_engine": "tesseract",
-        "selected_candidate": f"mrz_psm6_{'found' if has_mrz else 'not_found'}",
+        "selected_ocr_engine": engine_used,
+        "selected_candidate": f"mrz_{engine_used}_{'found' if has_mrz else 'not_found'}",
         "candidate_score": confidence_score,
         "validation_summary": ";".join(check_digits.get("errors", [])),
         "warnings": result_fields["ocr_warning"],
