@@ -1,10 +1,16 @@
 """Score and select the best OCR candidate.
 
 Uses PaddleOCR as the primary engine, Tesseract as fallback.
+Integrates PaddleOCR confidence into candidate scoring for
+higher accuracy on global passport documents.
 """
 
 from guestfill_ocr.ocr.ocr_candidate import OcrCandidate
-from guestfill_ocr.ocr.paddleocr_engine import check_paddleocr_available, run_paddleocr_mrz
+from guestfill_ocr.ocr.paddleocr_engine import (
+    check_paddleocr_available,
+    compute_average_confidence,
+    run_paddleocr_mrz_with_details,
+)
 from guestfill_ocr.ocr.tesseract_engine import run_mrz_ocr
 from guestfill_ocr.passport.mrz_cleaner import clean_mrz_text
 from guestfill_ocr.passport.mrz_validator import validate_check_digit
@@ -69,6 +75,10 @@ def score_candidate(candidate: OcrCandidate, line1: str | None, line2: str | Non
     if not line2:
         score -= 100.0
 
+    if candidate.ocr_confidence is not None and candidate.ocr_confidence > 0:
+        confidence_bonus = candidate.ocr_confidence * 50.0
+        score += confidence_bonus
+
     return score
 
 
@@ -79,18 +89,22 @@ def _run_single_candidate_ocr(
     upscale_factor: float = 1.0,
 ) -> bool:
     if use_paddleocr:
-        result = run_paddleocr_mrz(candidate.image, timeout=timeout, upscale_factor=upscale_factor)
+        result = run_paddleocr_mrz_with_details(candidate.image, timeout=timeout, upscale_factor=upscale_factor)
         if result.is_ok():
-            raw_text = result.unwrap()
-            if raw_text.strip():
-                candidate.raw_text = raw_text
-                candidate.cleaned_lines = clean_mrz_text(raw_text)
+            raw_text, details = result.unwrap()
+            joined = "\n".join(raw_text) if isinstance(raw_text, list) else str(raw_text)
+            if joined.strip():
+                candidate.raw_text = joined
+                candidate.cleaned_lines = clean_mrz_text(joined)
+                flat_details = [item for sublist in details for item in sublist]
+                candidate.ocr_confidence = compute_average_confidence(flat_details) if flat_details else 0.0
                 return True
 
     result = run_mrz_ocr(candidate.image, psm=candidate.psm, timeout=timeout)
     if result.is_ok():
         candidate.raw_text = result.unwrap()
         candidate.cleaned_lines = clean_mrz_text(candidate.raw_text)
+        candidate.ocr_confidence = None
         return True
     return False
 
@@ -160,6 +174,74 @@ def select_best_candidate_with_engine(
     return best_candidate, warnings, engine_used
 
 
+def try_multi_lang_paddleocr(
+    candidate: OcrCandidate,
+    timeout: int = 8,
+    upscale_factor: float = 1.5,
+    languages: list[str] | None = None,
+) -> tuple[OcrCandidate | None, list[str], str]:
+    if languages is None:
+        languages = ["ml", "en", "fr", "de", "es", "ar", "ru", "ch", "ja", "ko"]
+    warnings: list[str] = []
+
+    if not check_paddleocr_available():
+        warnings.append("PADDLE_OCR_UNAVAILABLE")
+        result = run_mrz_ocr(candidate.image, psm=candidate.psm, timeout=timeout)
+        if result.is_ok():
+            candidate.raw_text = result.unwrap()
+            candidate.cleaned_lines = clean_mrz_text(candidate.raw_text)
+            return candidate if candidate.cleaned_lines else None, warnings, "tesseract"
+        return None, warnings, "tesseract"
+
+    best_candidate: OcrCandidate | None = None
+    best_score_val = float("-inf")
+    best_lang = languages[0]
+
+    for lang in languages:
+        result = run_paddleocr_mrz_with_details(
+            candidate.image, timeout=timeout, lang=lang, upscale_factor=upscale_factor
+        )
+        if result.is_ok():
+            raw_text, details = result.unwrap()
+            joined = "\n".join(raw_text) if isinstance(raw_text, list) else str(raw_text)
+            if joined.strip():
+                temp = OcrCandidate(
+                    image=candidate.image,
+                    psm=candidate.psm,
+                    preprocessing=candidate.preprocessing,
+                    crop_source=candidate.crop_source,
+                    crop_ratio=candidate.crop_ratio,
+                )
+                temp.raw_text = joined
+                temp.cleaned_lines = clean_mrz_text(joined)
+                flat_details = [item for sublist in details for item in sublist]
+                temp.ocr_confidence = compute_average_confidence(flat_details) if flat_details else 0.0
+                line1 = temp.cleaned_lines[0] if len(temp.cleaned_lines) >= 1 else None
+                line2 = temp.cleaned_lines[1] if len(temp.cleaned_lines) >= 2 else None
+                temp.score = score_candidate(temp, line1, line2)
+                if temp.score > best_score_val:
+                    best_score_val = temp.score
+                    best_candidate = temp
+                    best_lang = lang
+
+    if best_candidate is None:
+        warnings.append("PADDLE_OCR_FAILED")
+        result = run_mrz_ocr(candidate.image, psm=candidate.psm, timeout=timeout)
+        if result.is_ok():
+            candidate.raw_text = result.unwrap()
+            candidate.cleaned_lines = clean_mrz_text(candidate.raw_text)
+            return candidate if candidate.cleaned_lines else None, warnings, "tesseract"
+        return None, warnings, "tesseract"
+
+    candidate.raw_text = best_candidate.raw_text
+    candidate.cleaned_lines = best_candidate.cleaned_lines
+    candidate.ocr_confidence = best_candidate.ocr_confidence
+    candidate.score = best_candidate.score
+    warnings.append(f"PADDLE_OCR_USED_LANG_{best_lang.upper()}")
+
+    return candidate, warnings, "paddleocr"
+
+
 async def select_best_candidate(
     candidates: list[OcrCandidate], timeout: int = 8
 ) -> tuple[OcrCandidate | None, list[str]]:
@@ -175,6 +257,5 @@ def select_best_candidate_sync(
 
 
 def get_select_best_candidate_engine(candidates: list[OcrCandidate], timeout: int = 8) -> str:
-    """Return the engine name that would be used for the given candidates."""
     _, _, engine = select_best_candidate_with_engine(candidates, timeout=timeout, prefer_paddleocr=True)
     return engine

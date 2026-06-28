@@ -14,6 +14,7 @@ class OcrCandidate:
     raw_text: str = ""
     cleaned_lines: list[str] = field(default_factory=list)
     score: float = 0.0
+    ocr_confidence: float | None = None
 
 
 def generate_ocr_candidates(preprocessed_images: list[dict]) -> list[OcrCandidate]:

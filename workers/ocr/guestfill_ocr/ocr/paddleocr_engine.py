@@ -2,6 +2,9 @@
 
 PaddleOCR is used as the primary OCR engine for MRZ extraction.
 Tesseract is used as fallback when PaddleOCR is unavailable or fails.
+
+Supports multi-language passport documents from around the world using
+PaddleOCR's multilingual model (lang='ml') and specific language models.
 """
 
 from typing import Any
@@ -14,7 +17,7 @@ from guestfill_ocr.common.result import Err, Ok, Result
 
 _PPOCR_AVAILABLE = False
 _PPOCR_CHECKED = False
-_PPOCR_INSTANCE: Any = None
+_PPOCR_INSTANCES: dict[str, Any] = {}
 
 MRZ_TD3_LENGTH = 44
 MRZ_TD2_LENGTH = 36
@@ -22,16 +25,34 @@ MRZ_TD1_LENGTH = 30
 
 MRZ_VALID_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
 MRZ_FORMAT_LENGTHS = [MRZ_TD3_LENGTH, MRZ_TD2_LENGTH, MRZ_TD1_LENGTH]
-
-# Minimum lines required for each format
 MRZ_FORMAT_LINES: dict[int, int] = {
     MRZ_TD3_LENGTH: 2,
     MRZ_TD2_LENGTH: 2,
     MRZ_TD1_LENGTH: 3,
 }
 
-# Reverse MRZ for upside-down detection
 MRZ_LINE1_START_PREFIXES = ("P<", "P", "I<", "ID", "V<")
+
+SUPPORTED_PPOCR_LANGS: dict[str, str] = {
+    "ml": "multilingual",
+    "en": "english",
+    "ch": "chinese",
+    "ja": "japanese",
+    "ko": "korean",
+    "fr": "french",
+    "de": "german",
+    "es": "spanish",
+    "it": "italian",
+    "pt": "portuguese",
+    "ru": "russian",
+    "ar": "arabic",
+    "tr": "turkish",
+    "nl": "dutch",
+    "pl": "polish",
+    "vi": "vietnamese",
+}
+
+DEFAULT_PPOCR_LANG = "ml"
 
 
 def check_paddleocr_available() -> bool:
@@ -48,12 +69,12 @@ def check_paddleocr_available() -> bool:
     return _PPOCR_AVAILABLE
 
 
-def _get_paddleocr_instance(lang: str = "en") -> Any:
-    global _PPOCR_INSTANCE
-    if _PPOCR_INSTANCE is None:
+def _get_paddleocr_instance(lang: str = DEFAULT_PPOCR_LANG) -> Any:
+    global _PPOCR_INSTANCES
+    if lang not in _PPOCR_INSTANCES:
         from paddleocr import PaddleOCR
 
-        _PPOCR_INSTANCE = PaddleOCR(
+        _PPOCR_INSTANCES[lang] = PaddleOCR(
             lang=lang,
             use_angle_cls=False,
             show_log=False,
@@ -62,19 +83,45 @@ def _get_paddleocr_instance(lang: str = "en") -> Any:
             det_db_box_thresh=0.5,
             rec_batch_num=6,
         )
-    return _PPOCR_INSTANCE
+    return _PPOCR_INSTANCES[lang]
 
 
-def reset_paddleocr_instance() -> None:
-    global _PPOCR_INSTANCE
-    _PPOCR_INSTANCE = None
+def reset_paddleocr_instance(lang: str | None = None) -> None:
+    global _PPOCR_INSTANCES
+    if lang is None:
+        _PPOCR_INSTANCES.clear()
+    else:
+        _PPOCR_INSTANCES.pop(lang, None)
+
+
+def resolve_ocr_lang(country_code: str | None = None) -> str:
+    if country_code is None:
+        return DEFAULT_PPOCR_LANG
+    country_to_lang: dict[str, str] = {
+        "CHN": "ch",
+        "JPN": "ja",
+        "KOR": "ko",
+        "FRA": "fr",
+        "DEU": "de",
+        "ESP": "es",
+        "ITA": "it",
+        "PRT": "pt",
+        "RUS": "ru",
+        "ARE": "ar",
+        "SAU": "ar",
+        "TUR": "tr",
+        "NLD": "nl",
+        "POL": "pl",
+        "VNM": "vi",
+    }
+    return country_to_lang.get(country_code, DEFAULT_PPOCR_LANG)
 
 
 def run_paddleocr_mrz(
     image: np.ndarray | str,
     timeout: int = 30,
     confidence_threshold: float = 0.5,
-    lang: str = "en",
+    lang: str = DEFAULT_PPOCR_LANG,
     upscale_factor: float = 1.0,
 ) -> Result:
     if not check_paddleocr_available():
@@ -115,8 +162,59 @@ def run_paddleocr_mrz(
         if result is None or len(result) == 0 or result[0] is None:
             return Ok("")
 
-        lines = _extract_mrz_text(result, confidence_threshold)
+        lines, _details = _extract_mrz_text(result, confidence_threshold)
         return Ok("\n".join(lines))
+    except Exception as e:
+        return Err(OcrError("OCR_FAILED", f"PaddleOCR failed: {e}"))
+
+
+def run_paddleocr_mrz_with_details(
+    image: np.ndarray | str,
+    timeout: int = 30,
+    confidence_threshold: float = 0.5,
+    lang: str = DEFAULT_PPOCR_LANG,
+    upscale_factor: float = 1.0,
+) -> Result:
+    if not check_paddleocr_available():
+        return Err(
+            OcrError(
+                "PADDLEOCR_NOT_FOUND",
+                "PaddleOCR is not installed.",
+            )
+        )
+
+    try:
+        if isinstance(image, str):
+            img = cv2.imread(image)
+            if img is None:
+                return Err(OcrError("IMAGE_UNREADABLE", f"Cannot read image: {image}"))
+        elif isinstance(image, np.ndarray):
+            img = image
+            if len(img.shape) == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+            elif len(img.shape) == 3 and img.shape[2] == 4:
+                img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+        else:
+            return Err(OcrError("OCR_FAILED", "Invalid image type"))
+
+        if upscale_factor > 1.0 and img is not None:
+            h, w = img.shape[:2]
+            img = cv2.resize(
+                img,
+                None,
+                fx=upscale_factor,
+                fy=upscale_factor,
+                interpolation=cv2.INTER_CUBIC,
+            )
+
+        ocr = _get_paddleocr_instance(lang=lang)
+        result = ocr.ocr(img, cls=False)
+
+        if result is None or len(result) == 0 or result[0] is None:
+            return Ok(("", []))
+
+        lines, details = _extract_mrz_text(result, confidence_threshold)
+        return Ok((lines, details))
     except Exception as e:
         return Err(OcrError("OCR_FAILED", f"PaddleOCR failed: {e}"))
 
@@ -134,11 +232,6 @@ def _compute_adaptive_y_tolerance(items: list) -> float:
 def _group_by_y_coordinate(
     ocr_result: list,
 ) -> list[list[Any]]:
-    """Group OCR text detections by their y-coordinate (row).
-
-    Uses the vertical center of each bounding box to determine line membership.
-    Tolerance is computed adaptively based on detected text sizes.
-    """
     items: list[Any] = []
 
     for region in ocr_result:
@@ -184,7 +277,6 @@ def _group_by_y_coordinate(
 def _sort_group_by_x(
     group: list[Any],
 ) -> list[Any]:
-    """Sort items within a y-group by their x-coordinate (left-to-right)."""
     with_x: list[Any] = []
     for bbox, text_data in group:
         x_vals = [pt[0] for pt in bbox]
@@ -198,31 +290,30 @@ def _sort_group_by_x(
 def _reconstruct_line(
     sorted_items: list[Any],
     confidence_threshold: float = 0.5,
-) -> str | None:
-    """Concatenate text items from the same line with spacing logic."""
+) -> tuple[str | None, list[dict]]:
     parts: list[str] = []
+    char_details: list[dict] = []
+
     for text, conf in sorted_items:
         if conf is not None and conf >= confidence_threshold:
             cleaned = text.strip()
             cleaned = cleaned.replace(" ", "").replace("\t", "")
             if cleaned:
+                char_details.append({"text": cleaned, "confidence": conf})
                 parts.append(cleaned)
 
     if not parts:
-        return None
+        return None, []
 
     combined = "".join(parts)
     cleaned = "".join(ch for ch in combined if ch in MRZ_VALID_CHARS or ch.islower())
     cleaned = cleaned.upper()
-    return cleaned if len(cleaned) >= 15 else None
+    if len(cleaned) >= 15:
+        return cleaned, char_details
+    return None, []
 
 
 def _detect_mrz_format(candidates: list[str]) -> int | None:
-    """Detect the MRZ format based on line lengths.
-
-    Returns the detected format length (44 for TD3, 36 for TD2, 30 for TD1)
-    or None if no format is detected.
-    """
     for length in MRZ_FORMAT_LENGTHS:
         min_lines = MRZ_FORMAT_LINES[length]
         matching = [ln for ln in candidates if len(ln) == length]
@@ -252,56 +343,69 @@ def _try_detect_upside_down(lines: list[str]) -> bool:
     return upside_down_hints > normal_hints
 
 
+def compute_average_confidence(char_details: list[dict]) -> float:
+    if not char_details:
+        return 0.0
+    confidences = [d.get("confidence", 0) for d in char_details if d.get("confidence") is not None]
+    if not confidences:
+        return 0.0
+    return sum(confidences) / len(confidences)
+
+
 def _extract_mrz_text(
     ocr_result: list,
     confidence_threshold: float = 0.5,
-) -> list[str]:
-    """Extract MRZ text from PaddleOCR output using spatial layout.
-
-    Groups detections by y-coordinate to reconstruct MRZ lines,
-    then selects the best matching lines based on format and scoring.
-    Handles TD3 (2x44), TD2 (2x36), and TD1 (3x30) formats.
-    """
+) -> tuple[list[str], list[list[dict]]]:
     groups = _group_by_y_coordinate(ocr_result)
     if not groups:
-        return []
+        return [], []
 
-    reconstructed_lines: list[str] = []
+    reconstructed_lines: list[tuple[str, list[dict]]] = []
     for group in groups:
         sorted_items = _sort_group_by_x(group)
-        line = _reconstruct_line(sorted_items, confidence_threshold)
+        line, line_details = _reconstruct_line(sorted_items, confidence_threshold)
         if line:
-            reconstructed_lines.append(line)
+            reconstructed_lines.append((line, line_details))
 
     if not reconstructed_lines:
-        return []
+        return [], []
 
-    detected_format = _detect_mrz_format(reconstructed_lines)
+    lines = [ln for ln, _ in reconstructed_lines]
+    all_details: list[list[dict]] = [det for _, det in reconstructed_lines]
+
+    detected_format = _detect_mrz_format(lines)
     if detected_format is not None:
-        matching = [ln for ln in reconstructed_lines if len(ln) == detected_format]
-        if _try_detect_upside_down(matching):
-            matching = [ln[::-1] for ln in matching]
-        return matching[:3]
+        matching_lines: list[str] = []
+        matching_details: list[list[dict]] = []
+        for ln, det in zip(lines, all_details, strict=False):
+            if len(ln) == detected_format:
+                matching_lines.append(ln)
+                matching_details.append(det)
+        if _try_detect_upside_down(matching_lines):
+            matching_lines = [ln[::-1] for ln in matching_lines]
+        return matching_lines[:3], matching_details[:3]
 
-    scored: list[tuple[float, str]] = []
-    for line in reconstructed_lines:
-        score = _score_mrz_likelihood(line)
+    scored: list[tuple[float, str, list[dict]]] = []
+    for ln, det in zip(lines, all_details, strict=False):
+        score = _score_mrz_likelihood(ln)
         if score > 0:
-            scored.append((score, line))
+            scored.append((score, ln, det))
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
-    selected: list[str] = []
+    selected_lines: list[str] = []
+    selected_details: list[list[dict]] = []
     seen_texts: set[str] = set()
-    for _score_val, text in scored:
-        if len(selected) >= 3:
+    for _score_val, text, det in scored:
+        if len(selected_lines) >= 3:
             break
         if text in seen_texts:
             continue
         seen_texts.add(text)
-        selected.append(text)
+        selected_lines.append(text)
+        selected_details.append(det)
 
-    return selected
+    return selected_lines, selected_details
 
 
 def _score_mrz_likelihood(text: str) -> float:
