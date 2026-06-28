@@ -2,13 +2,13 @@
 
 import json
 import platform
-from datetime import datetime
+from datetime import UTC, datetime
 
 
 def generate_diagnostic_report(job_id: str, options: dict, summary: dict, error_count: int) -> dict:
     return {
         "job_id": job_id,
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "ocr_worker_version": "0.1.0",
         "python_version": platform.python_version(),
         "platform": platform.system(),

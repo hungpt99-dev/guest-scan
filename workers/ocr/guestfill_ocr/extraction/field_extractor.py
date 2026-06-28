@@ -1,6 +1,6 @@
 """Extract and normalize fields from raw OCR data."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from guestfill_ocr.extraction.field_normalizer import (
     normalize_country,
@@ -18,7 +18,7 @@ def build_guest_row(
     visual_fields: dict | None = None,
     id_fields: dict | None = None,
 ) -> dict:
-    row_id = f"ROW_{datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')}"
+    row_id = f"ROW_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S_%f')}"
     row = {
         "row_id": row_id,
         "full_name": "",
