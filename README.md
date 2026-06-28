@@ -70,6 +70,9 @@ pnpm secrets:scan     # Scan for secrets and .env files
 
 ## Current Status
 
-Active development with 119+ unit and integration tests covering the TypeScript frontend logic, including the Result type, file utilities, masking, date formatting, transform engine, safety engine, template manager, copy assistant, and full import-to-fill workflow integration.
+Active development with **220+ tests**:
 
-OCR and Auto-fill modules are implemented and covered by tests. See `docs/CHANGELOG.md` for version history.
+- **TypeScript (160+ tests):** Vitest unit + E2E integration tests covering Result type, file utilities, masking, date formatting, transform engine, safety engine, template manager, copy assistant, fill store, settings persistence, OCR job lifecycle, diagnostics, browser extension messaging, and full import-to-fill workflow pipelines
+- **Python (101 tests):** Pytest unit + E2E integration tests covering MRZ parsing, check digit validation, MRZ repair, confidence scoring, field normalization, Excel export with all sheets, and full end-to-end OCR-to-Excel pipeline
+
+See `docs/CHANGELOG.md` for version history.

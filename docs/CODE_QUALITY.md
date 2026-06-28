@@ -64,10 +64,29 @@
 
 - Unit tests for all parser, validation, and transformation logic
 - Integration tests for feature workflows
+- **E2E integration tests** for complete cross-feature pipelines (OCR -> Import -> Validate -> Transform -> Fill)
 - Tests should not depend on real files or external services
 - Python tests use pytest with standard `test_*.py` naming
-- TypeScript tests use vitest with `.test.ts` naming convention
-- TypeScript tests live in `src/__tests__/` mirroring source structure
+- TypeScript tests use vitest with `.test.ts` naming convention, live in `src/__tests__/` mirroring source structure
+
+### Test Organization
+
+**TypeScript (Vitest):** `apps/desktop/src/__tests__/`
+
+- `lib/` — Unit tests for shared utilities (date, file, masking, result)
+- `features/` — Feature-specific tests organized by module
+  - `features/excel/` — Excel validation, import integration
+  - `features/fill/` — Fill workflow, safety engine, transform, store, template
+  - `features/settings/` — Settings persistence E2E
+  - `features/ocr/` — OCR job lifecycle
+  - `features/diagnostics/` — Diagnostics report generation
+  - `features/extension/` — Browser extension message handling
+  - `features/cross-feature/` — Full end-to-end pipeline tests
+
+**Python (pytest):** `workers/ocr/tests/`
+
+- `unit/` — Unit tests for individual modules
+- `e2e/` — E2E integration tests for full MRZ pipeline and Excel export
 
 ## Commit Message Rules
 

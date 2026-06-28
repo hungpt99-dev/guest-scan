@@ -36,7 +36,9 @@ guestfill/
 | `pnpm format:check`     | Check formatting without changing files |
 | `pnpm lint`             | Run all linters                         |
 | `pnpm typecheck`        | Run all type checks                     |
-| `pnpm test`             | Run all tests                           |
+| `pnpm test`             | Run all tests (unit, integration, E2E)  |
+| `pnpm test:ts`          | Run TypeScript tests (Vitest)           |
+| `pnpm test:py`          | Run Python tests (pytest)               |
 | `pnpm quality`          | Format check + lint + typecheck         |
 | `pnpm verify`           | Full quality check + tests              |
 | `pnpm secrets:scan`     | Scan for secrets and .env files         |
