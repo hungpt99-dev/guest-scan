@@ -73,7 +73,8 @@ export async function put<T>(storeName: string, value: T): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, "readwrite");
     const store = tx.objectStore(storeName);
-    store.put(value);
+    const request = store.put(value);
+    request.onerror = () => reject(request.error);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

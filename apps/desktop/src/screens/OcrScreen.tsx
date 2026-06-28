@@ -101,8 +101,8 @@ export default function OcrScreen() {
             <div>
               <p className="text-sm text-gray-600">{selectedFiles.length} file(s) selected</p>
               <ul className="mt-2 max-h-32 overflow-y-auto text-xs text-gray-500">
-                {selectedFiles.map((f, i) => (
-                  <li key={i}>{f}</li>
+                {selectedFiles.map((f) => (
+                  <li key={f}>{f}</li>
                 ))}
               </ul>
             </div>
@@ -117,17 +117,12 @@ export default function OcrScreen() {
           <Button variant="secondary" onClick={handleSelectOutput}>
             Choose Output File
           </Button>
-          {outputPath && (
-            <p className="break-all text-sm text-gray-600">Output: {outputPath}</p>
-          )}
+          {outputPath && <p className="break-all text-sm text-gray-600">Output: {outputPath}</p>}
         </div>
       </Card>
 
       <Card title="Step 3: Run OCR">
-        <Button
-          disabled={selectedFiles.length === 0 || !outputPath || processing}
-          onClick={handleCreateExcel}
-        >
+        <Button disabled={selectedFiles.length === 0 || !outputPath || processing} onClick={handleCreateExcel}>
           {processing ? "Processing..." : "Create Excel"}
         </Button>
         {processing && <LoadingState message="Processing documents..." />}
@@ -138,9 +133,7 @@ export default function OcrScreen() {
       {result && (
         <Card title="Result" className="border-2 border-green-200">
           <p className="text-sm text-gray-700">{result}</p>
-          {outputPath && (
-            <p className="mt-2 text-xs text-gray-500">Excel saved to: {outputPath}</p>
-          )}
+          {outputPath && <p className="mt-2 text-xs text-gray-500">Excel saved to: {outputPath}</p>}
         </Card>
       )}
     </div>

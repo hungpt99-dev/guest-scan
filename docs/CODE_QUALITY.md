@@ -66,7 +66,8 @@
 - Integration tests for feature workflows
 - Tests should not depend on real files or external services
 - Python tests use pytest with standard `test_*.py` naming
-- TypeScript tests (when added) should use vitest or jest
+- TypeScript tests use vitest with `.test.ts` naming convention
+- TypeScript tests live in `src/__tests__/` mirroring source structure
 
 ## Commit Message Rules
 

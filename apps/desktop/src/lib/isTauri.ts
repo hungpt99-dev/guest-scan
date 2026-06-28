@@ -1,9 +1,5 @@
 export function isTauri(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    typeof window.__TAURI_IPC__ !== "undefined" &&
-    window.__TAURI_IPC__ !== null
-  );
+  return typeof window !== "undefined" && typeof window.__TAURI_IPC__ !== "undefined" && window.__TAURI_IPC__ !== null;
 }
 
 export async function requireTauri(): Promise<void> {

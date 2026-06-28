@@ -95,7 +95,13 @@ This document describes the Auto-fill module architecture, Excel import, Copy As
 - guest_rows: per-row data with indexes on session, status, fill status, name
 - target_templates: fill configuration templates
 - fill_events: event log with indexes
-- settings: key-value settings store
+- settings: key-value settings store (includes fill settings as `fill_settings` key)
+
+### Settings Persistence (`features/settings/settingsStore.ts`)
+
+- Fill settings are persisted to IndexedDB under the `settings` store with key `fill_settings`
+- Settings are loaded on mount and saved immediately on any change
+- Default settings include: Excel folder, target system, date format, clipboard timeout, global shortcut toggles, bridge port
 
 ## Privacy & Security
 

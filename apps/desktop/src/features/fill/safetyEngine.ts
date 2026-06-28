@@ -14,7 +14,7 @@ export type SafetyCheck = {
 export function checkGuestRow(guest: GuestRow, requireConfirmation?: boolean): SafetyCheckResult {
   const checks: SafetyCheck[] = [];
 
-  const rowExists = !!guest.id || false;
+  const rowExists = !!guest.id;
   checks.push({ name: "guest_row_exists", passed: rowExists, message: rowExists ? undefined : "Guest row not found" });
 
   const notFailed = !!(guest.status !== "FAILED" || requireConfirmation);
@@ -144,9 +144,16 @@ function checkRequiredFields(guest: GuestRow): boolean {
   return true;
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function matchPattern(pattern: string, url: string): boolean {
   if (pattern.includes("*")) {
-    const regex = new RegExp("^" + pattern.replace(/\*/g, ".*").replace(/[.+?^${}()|[\]\\]/g, "\\$&") + "$");
+    const parts = pattern.split("*");
+    const escaped = parts.map((p) => escapeRegex(p));
+    const regexStr = escaped.join(".*");
+    const regex = new RegExp(regexStr);
     return regex.test(url);
   }
   return url.includes(pattern);

@@ -1,39 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Card from "../components/common/Card";
 import { DEFAULT_KEYBOARD_SHORTCUTS } from "../features/fill/fillConstants";
-
-type FillSettings = {
-  defaultExcelFolder: string;
-  defaultTargetSystemId: string;
-  dateDisplayFormat: string;
-  autoOpenNextGuestAfterFilled: boolean;
-  maskDocumentNumberInLogs: boolean;
-  clearClipboardAfterSeconds: number;
-  enableGlobalShortcuts: boolean;
-  enableBrowserExtension: boolean;
-  enableDesktopAutomation: boolean;
-  localBridgePort: number;
-};
-
-const DEFAULT_SETTINGS: FillSettings = {
-  defaultExcelFolder: "",
-  defaultTargetSystemId: "copy_assistant",
-  dateDisplayFormat: "yyyy-MM-dd",
-  autoOpenNextGuestAfterFilled: true,
-  maskDocumentNumberInLogs: true,
-  clearClipboardAfterSeconds: 60,
-  enableGlobalShortcuts: false,
-  enableBrowserExtension: true,
-  enableDesktopAutomation: true,
-  localBridgePort: 43175,
-};
+import { loadSettings, saveSettings, type FillSettings } from "../features/settings/settingsStore";
 
 export default function SettingsScreen() {
-  const [settings, setSettings] = useState<FillSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<FillSettings | null>(null);
+
+  useEffect(() => {
+    loadSettings().then(setSettings);
+  }, []);
 
   const update = (key: keyof FillSettings, value: unknown) => {
-    setSettings((prev) => ({ ...prev, [key]: value }));
+    setSettings((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, [key]: value };
+      saveSettings(updated);
+      return updated;
+    });
   };
+
+  if (!settings) return null;
 
   return (
     <div className="space-y-6">

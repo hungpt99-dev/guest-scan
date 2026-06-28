@@ -70,4 +70,6 @@ pnpm secrets:scan     # Scan for secrets and .env files
 
 ## Current Status
 
-Early development — monorepo scaffold in place with placeholder screens and commands. OCR and Auto-fill implementation in progress.
+Active development with 119+ unit and integration tests covering the TypeScript frontend logic, including the Result type, file utilities, masking, date formatting, transform engine, safety engine, template manager, copy assistant, and full import-to-fill workflow integration.
+
+OCR and Auto-fill modules are implemented and covered by tests. See `docs/CHANGELOG.md` for version history.

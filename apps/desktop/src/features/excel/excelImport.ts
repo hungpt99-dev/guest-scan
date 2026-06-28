@@ -15,9 +15,12 @@ export type RawExcelRow = Record<string, string | number | null | undefined>;
 
 export async function importExcelFromPath(filePath: string): Promise<ImportResult> {
   let dataRows: RawExcelRow[];
+  let fileHash = "";
 
   try {
-    dataRows = await readExcelFile(filePath);
+    const result = await readExcelFile(filePath);
+    dataRows = result.rows;
+    fileHash = result.hash;
   } catch (e) {
     return failResult([{ code: "EXCEL_IMPORT_FAILED", message: `Failed to read Excel file: ${e}` }]);
   }
@@ -74,7 +77,7 @@ export async function importExcelFromPath(filePath: string): Promise<ImportResul
   const sessionObj = {
     id: sessionId,
     excelPath: filePath,
-    excelFileHash: "",
+    excelFileHash: fileHash,
     createdAt: now,
     updatedAt: now,
     totalRows: guestRows.length,
@@ -118,18 +121,26 @@ export async function importExcelFromPath(filePath: string): Promise<ImportResul
   };
 }
 
-async function readExcelFile(filePath: string): Promise<RawExcelRow[]> {
+async function readExcelFile(filePath: string): Promise<{ rows: RawExcelRow[]; hash: string }> {
   const { invoke } = await import("@tauri-apps/api/tauri");
   const XLSX = await import("xlsx");
 
   const fileData = await invoke<number[]>("read_excel_file", { path: filePath });
   const uint8 = new Uint8Array(fileData);
+  const hash = await computeSimpleHash(uint8);
   const workbook = XLSX.read(uint8, { type: "array" });
   const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) return [];
+  if (!firstSheetName) return { rows: [], hash };
   const firstSheet = workbook.Sheets[firstSheetName];
-  if (!firstSheet) return [];
-  return XLSX.utils.sheet_to_json<RawExcelRow>(firstSheet);
+  if (!firstSheet) return { rows: [], hash };
+  const rows = XLSX.utils.sheet_to_json<RawExcelRow>(firstSheet);
+  return { rows, hash };
+}
+
+async function computeSimpleHash(data: Uint8Array): Promise<string> {
+  const hashBuffer = await window.crypto.subtle.digest("SHA-256", data as unknown as ArrayBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 function buildHeaderMap(headers: string[]): Record<string, string> {

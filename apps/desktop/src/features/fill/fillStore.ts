@@ -1,4 +1,5 @@
 import type { GuestRow, FillEvent } from "@guestfill/shared";
+import { maskPassportNumber, maskIdNumber, maskFullName } from "@guestfill/shared";
 import type { FillSession } from "./fillTypes";
 import { getAll, getById, getByIndex, put } from "../../lib/db";
 
@@ -59,12 +60,20 @@ export async function getFillEvents(sessionId: string): Promise<FillEvent[]> {
 }
 
 export async function exportFillLogCsv(sessionId: string): Promise<string> {
-  const events = await getFillEvents(sessionId);
+  const [events, guestRows] = await Promise.all([getFillEvents(sessionId), getGuestRows(sessionId)]);
+  const guestMap = new Map(guestRows.map((g) => [g.id, g]));
   const header = "timestamp,guest_name,document_number_masked,target_system,event,field_name,status,message";
   const rows = events.map((e) => {
-    const guestName = "";
-    const masked = "";
-    return `${e.createdAt},${guestName},${masked},${e.targetSystemId || ""},${e.eventType},${e.fieldName || ""},${e.status},${e.message || ""}`;
+    const guest = e.guestRowId ? guestMap.get(e.guestRowId) : undefined;
+    const guestName = guest ? maskFullName(guest.fullName) : "";
+    const docNum = guest
+      ? guest.passportNumber
+        ? maskPassportNumber(guest.passportNumber)
+        : guest.idNumber
+          ? maskIdNumber(guest.idNumber)
+          : ""
+      : "";
+    return `${e.createdAt},${guestName},${docNum},${e.targetSystemId || ""},${e.eventType},${e.fieldName || ""},${e.status},${e.message || ""}`;
   });
   return [header, ...rows].join("\n");
 }

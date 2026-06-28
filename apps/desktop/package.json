@@ -8,33 +8,34 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "test": "echo \"No frontend tests yet\"",
+    "test": "vitest run",
     "lint": "eslint . --ext .ts,.tsx --max-warnings 50",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist .vite"
   },
   "dependencies": {
     "@guestfill/shared": "workspace:*",
+    "@tauri-apps/api": "^1.6.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
     "react-router-dom": "^6.23.0",
-    "@tauri-apps/api": "^1.6.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.24.0",
     "@tauri-apps/cli": "^1.6.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.2.0",
     "autoprefixer": "^10.4.19",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.2",
     "postcss": "^8.4.38",
+    "rimraf": "^5.0.0",
     "tailwindcss": "^3.4.3",
     "typescript": "^5.4.0",
-    "vite": "^5.2.0",
-    "@vitejs/plugin-react": "^4.2.0",
-    "rimraf": "^5.0.0",
-    "eslint": "^10.5.0",
-    "@eslint/js": "^9.24.0",
     "typescript-eslint": "^8.31.0",
-    "eslint-config-prettier": "^10.1.2"
+    "vite": "^5.2.0",
+    "vitest": "^2.1.9"
   }
 }

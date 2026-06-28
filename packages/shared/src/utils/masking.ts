@@ -20,5 +20,7 @@ export function maskFullName(name: string): string {
   if (parts.length === 0) return name;
   const lastName = parts[parts.length - 1];
   if (!lastName) return name;
-  return maskString(lastName, 1);
+  const masked = maskString(lastName, 1);
+  const before = parts.slice(0, -1);
+  return [...before, masked].join(" ");
 }
