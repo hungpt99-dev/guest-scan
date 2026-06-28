@@ -1,4 +1,5 @@
 """E2E integration tests for Excel export."""
+
 import tempfile
 from pathlib import Path
 
@@ -162,11 +163,17 @@ class TestExportExcelE2E:
             output_path = f.name
 
         try:
-            export_to_excel(rows, errors, diagnostics, output_path, {
-                "includeErrorsSheet": True,
-                "includeInstructionsSheet": True,
-                "enableDiagnosticsSheet": True,
-            })
+            export_to_excel(
+                rows,
+                errors,
+                diagnostics,
+                output_path,
+                {
+                    "includeErrorsSheet": True,
+                    "includeInstructionsSheet": True,
+                    "enableDiagnosticsSheet": True,
+                },
+            )
             assert Path(output_path).exists()
             assert Path(output_path).stat().st_size > 0
         finally:
@@ -179,11 +186,17 @@ class TestExportExcelE2E:
             output_path = f.name
 
         try:
-            export_to_excel(rows, [], [], output_path, {
-                "includeErrorsSheet": False,
-                "includeInstructionsSheet": False,
-                "enableDiagnosticsSheet": False,
-            })
+            export_to_excel(
+                rows,
+                [],
+                [],
+                output_path,
+                {
+                    "includeErrorsSheet": False,
+                    "includeInstructionsSheet": False,
+                    "enableDiagnosticsSheet": False,
+                },
+            )
             assert Path(output_path).exists()
             assert Path(output_path).stat().st_size > 0
         finally:
@@ -201,20 +214,41 @@ class TestExportExcelE2E:
 
     def test_export_multiple_guests_various_statuses(self) -> None:
         rows = [
-            {"row_id": str(i), "full_name": f"Guest {i}", "surname": "", "given_name": "",
-             "passport_number": "", "id_number": "", "nationality": "", "date_of_birth": "",
-             "gender": "M", "passport_expiry_date": "", "id_expiry_date": "",
-             "issuing_country": "", "issuing_authority": "", "document_type": "PASSPORT",
-             "room_number": "", "arrival_date": "", "departure_date": "",
-             "reservation_code": "", "status": status,
-             "confidence_score": score, "confidence_level": level,
-             "note": "", "ocr_warning": "", "source_file": ""}
-            for i, (status, score, level) in enumerate([
-                ("READY", 0.95, "HIGH"),
-                ("NEED_REVIEW", 0.65, "MEDIUM"),
-                ("FAILED", 0.0, "LOW"),
-                ("MISSING_DATA", 0.0, "LOW"),
-            ], 1)
+            {
+                "row_id": str(i),
+                "full_name": f"Guest {i}",
+                "surname": "",
+                "given_name": "",
+                "passport_number": "",
+                "id_number": "",
+                "nationality": "",
+                "date_of_birth": "",
+                "gender": "M",
+                "passport_expiry_date": "",
+                "id_expiry_date": "",
+                "issuing_country": "",
+                "issuing_authority": "",
+                "document_type": "PASSPORT",
+                "room_number": "",
+                "arrival_date": "",
+                "departure_date": "",
+                "reservation_code": "",
+                "status": status,
+                "confidence_score": score,
+                "confidence_level": level,
+                "note": "",
+                "ocr_warning": "",
+                "source_file": "",
+            }
+            for i, (status, score, level) in enumerate(
+                [
+                    ("READY", 0.95, "HIGH"),
+                    ("NEED_REVIEW", 0.65, "MEDIUM"),
+                    ("FAILED", 0.0, "LOW"),
+                    ("MISSING_DATA", 0.0, "LOW"),
+                ],
+                1,
+            )
         ]
 
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as f:

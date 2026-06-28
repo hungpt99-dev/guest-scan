@@ -1,4 +1,5 @@
 """E2E integration tests for the full MRZ pipeline."""
+
 from guestfill_ocr.passport.mrz_parser import parse_mrz_lines
 from guestfill_ocr.passport.mrz_validator import (
     char_value,
@@ -144,6 +145,7 @@ class TestFullMrzPipelineE2E:
         assert char_value("<") == 0
 
         import pytest
+
         with pytest.raises(ValueError):
             char_value("!")
 

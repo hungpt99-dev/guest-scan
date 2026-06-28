@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use std::path::Path;
+use tauri::Manager;
 
 #[tauri::command]
 pub async fn select_files() -> Result<Vec<String>, AppError> {
@@ -43,7 +44,8 @@ pub async fn open_file(path: String, app: tauri::AppHandle) -> Result<(), AppErr
     if !path.exists() {
         return Err(AppError::new("FILE_NOT_FOUND", "File does not exist"));
     }
-    tauri::api::shell::open(&app.shell_scope(), &path, None).map_err(|e| {
+    let path_str = path.to_str().unwrap_or("");
+    tauri::api::shell::open(&app.shell_scope(), path_str, None).map_err(|e| {
         AppError::with_technical("OPEN_FAILED", "Failed to open file", e.to_string())
     })
 }
@@ -54,7 +56,8 @@ pub async fn open_folder(path: String, app: tauri::AppHandle) -> Result<(), AppE
     if !path.exists() {
         return Err(AppError::new("FOLDER_NOT_FOUND", "Folder does not exist"));
     }
-    tauri::api::shell::open(&app.shell_scope(), &path, None).map_err(|e| {
+    let path_str = path.to_str().unwrap_or("");
+    tauri::api::shell::open(&app.shell_scope(), path_str, None).map_err(|e| {
         AppError::with_technical("OPEN_FAILED", "Failed to open folder", e.to_string())
     })
 }

@@ -1,5 +1,7 @@
 """Tesseract OCR engine wrapper."""
 
+import subprocess
+
 import cv2
 import numpy as np
 import pytesseract
@@ -11,6 +13,26 @@ from guestfill_ocr.common.result import Err, Ok, Result
 MRZ_CONFIG = "-c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789< --psm 6"
 GENERIC_CONFIG = "--psm 3"
 
+_TESSERACT_CHECKED = False
+_TESSERACT_AVAILABLE = False
+
+
+def check_tesseract_available() -> bool:
+    global _TESSERACT_CHECKED, _TESSERACT_AVAILABLE
+    if _TESSERACT_CHECKED:
+        return _TESSERACT_AVAILABLE
+    try:
+        result = subprocess.run(
+            [pytesseract.pytesseract.tesseract_cmd, "--version"],
+            capture_output=True,
+            timeout=5,
+        )
+        _TESSERACT_AVAILABLE = result.returncode == 0
+    except Exception:
+        _TESSERACT_AVAILABLE = False
+    _TESSERACT_CHECKED = True
+    return _TESSERACT_AVAILABLE
+
 
 def run_tesseract_ocr(
     image: np.ndarray | str,
@@ -19,6 +41,15 @@ def run_tesseract_ocr(
     timeout: int = 8,
     char_whitelist: str | None = None,
 ) -> Result:
+    if not check_tesseract_available():
+        return Err(
+            OcrError(
+                "TESSERACT_NOT_FOUND",
+                "Tesseract OCR engine is not installed. Please install Tesseract "
+                "(brew install tesseract on macOS, apt install tesseract-ocr on Linux).",
+            )
+        )
+
     try:
         if isinstance(image, str):
             pil_image = Image.open(image)

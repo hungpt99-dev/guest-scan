@@ -1,10 +1,10 @@
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::process::Command;
 use std::fs;
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OcrRequest {
     pub files: Vec<String>,
     pub output_path: String,
@@ -13,6 +13,7 @@ pub struct OcrRequest {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OcrOptions {
     pub document_mode: Option<String>,
     pub max_image_width: Option<u32>,
@@ -26,7 +27,8 @@ pub struct OcrOptions {
     pub delete_temp_files: Option<bool>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct OcrJobResult {
     pub job_id: String,
     pub status: String,
@@ -35,7 +37,7 @@ pub struct OcrJobResult {
     pub errors: Vec<AppError>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct OcrSummary {
     pub total_files: u32,
     pub total_documents: u32,
@@ -90,9 +92,9 @@ pub async fn run_ocr(request: OcrRequest) -> Result<OcrJobResult, AppError> {
     cmd.args(&worker_args);
     cmd.arg("create-excel");
     cmd.arg("--request");
-    cmd.arg(&request_path.to_string_lossy());
+    cmd.arg(request_path.to_string_lossy().as_ref());
     cmd.arg("--response");
-    cmd.arg(&response_path.to_string_lossy());
+    cmd.arg(response_path.to_string_lossy().as_ref());
     cmd.current_dir(temp_dir.parent().unwrap_or(&temp_dir));
 
     let output = cmd.output()
@@ -115,7 +117,7 @@ pub async fn run_ocr(request: OcrRequest) -> Result<OcrJobResult, AppError> {
         return Err(AppError::with_technical(
             "OCR_WORKER_FAILED",
             "OCR worker failed to process the documents.",
-            &stderr,
+            &stderr.to_string(),
         ));
     }
 
@@ -164,5 +166,5 @@ fn build_worker_command() -> (String, Vec<String>) {
     }
 
     let python = if cfg!(target_os = "windows") { "python" } else { "python3" };
-    ("python".to_string(), vec!["-m".to_string(), "guestfill_ocr".to_string()])
+    (python.to_string(), vec!["-m".to_string(), "guestfill_ocr".to_string()])
 }

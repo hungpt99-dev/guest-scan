@@ -4,6 +4,7 @@ from guestfill_ocr.classification.document_classifier import classify_document
 from guestfill_ocr.common.result import Err, Ok, Result
 from guestfill_ocr.common.time_utils import Timer
 from guestfill_ocr.extraction.confidence_engine import (
+    calculate_id_card_confidence,
     calculate_passport_confidence,
     determine_status,
     get_confidence_level,
@@ -16,6 +17,7 @@ from guestfill_ocr.image.orientation import fix_exif_orientation
 from guestfill_ocr.image.preprocess import preprocess_pipeline, to_grayscale
 from guestfill_ocr.image.quality_analyzer import analyze_quality
 from guestfill_ocr.image.resize import resize_keep_ratio
+from guestfill_ocr.ocr.ocr_candidate import generate_ocr_candidates
 from guestfill_ocr.ocr.ocr_selector import select_best_candidate_sync
 from guestfill_ocr.passport.mrz_cropper import generate_all_candidates
 from guestfill_ocr.passport.mrz_parser import parse_mrz_lines
@@ -46,16 +48,26 @@ def process_document(file_path: str, options: dict) -> Result:
     repair_warnings: list[str] = []
     visual_used = False
     has_mrz = False
+    is_id_card = False
 
     if doc_type == "PASSPORT":
         processed = preprocess_pipeline(gray)
-        candidates = generate_all_candidates(processed)
+        mrz_candidates = generate_all_candidates(processed)
+        ocr_candidate_inputs = [
+            {
+                "image": c.image,
+                "preprocessing": c.preprocessing,
+                "source": c.source,
+                "crop_ratio": c.crop_ratio,
+            }
+            for c in mrz_candidates
+        ]
+        candidates = generate_ocr_candidates(ocr_candidate_inputs)
         best_candidate, candidate_warnings = select_best_candidate_sync(
             candidates, timeout=options.get("perCandidateTimeoutSeconds", 8)
         )
 
         if best_candidate and len(best_candidate.cleaned_lines) >= 2:
-            has_mrz = True
             raw_lines = best_candidate.cleaned_lines
             line1 = raw_lines[0] if len(raw_lines) >= 1 else ""
             line2 = raw_lines[1] if len(raw_lines) >= 2 else ""
@@ -64,8 +76,12 @@ def process_document(file_path: str, options: dict) -> Result:
             mrz_lines = [line1, line2]
             mrz_fields = parse_mrz_lines(line1, line2)
             check_digits = mrz_fields.get("check_digits", {})
-            result_fields = build_guest_row(source_file=file_path, mrz_fields=mrz_fields)
-        else:
+            has_valid_content = bool(mrz_fields.get("surname") or mrz_fields.get("passport_number"))
+            if has_valid_content:
+                has_mrz = True
+                result_fields = build_guest_row(source_file=file_path, mrz_fields=mrz_fields)
+
+        if result_fields is None:
             if options.get("enablePassportVisualOcr", True):
                 visual_result = run_passport_visual_ocr(file_path)
                 if visual_result.is_ok():
@@ -77,6 +93,7 @@ def process_document(file_path: str, options: dict) -> Result:
                 result_fields["status"] = "FAILED"
 
     elif doc_type == "ID_CARD" and options.get("enableIdCardOcr", True):
+        is_id_card = True
         id_result = process_id_card(gray, file_path)
         if id_result.is_ok():
             id_fields = id_result.unwrap()
@@ -96,7 +113,21 @@ def process_document(file_path: str, options: dict) -> Result:
         visual_used=visual_used,
     )
 
-    if has_mrz:
+    if is_id_card:
+        has_id_fields = bool(result_fields.get("id_number") or result_fields.get("full_name"))
+        has_dob = bool(result_fields.get("date_of_birth"))
+        has_number = bool(result_fields.get("id_number"))
+        confidence_score = calculate_id_card_confidence(
+            qr_found=False,
+            ocr_fields_found=has_id_fields,
+            layout_recognized=True,
+            date_valid=has_dob,
+            number_valid=has_number,
+            image_quality=quality,
+            warnings=warnings_list,
+            qr_conflict=False,
+        )
+    elif has_mrz:
         lines_valid = len(mrz_lines) >= 2 and all(len(l) == 44 for l in mrz_lines)
         confidence_score = calculate_passport_confidence(
             has_mrz=has_mrz,

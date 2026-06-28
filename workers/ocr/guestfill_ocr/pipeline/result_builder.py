@@ -37,12 +37,12 @@ def build_failed_response(job_id: str, error_dicts: list[dict]) -> dict:
         "status": "FAILED",
         "outputPath": None,
         "summary": {
-            "totalFiles": 0,
-            "totalDocuments": 0,
+            "total_files": 0,
+            "total_documents": 0,
             "ready": 0,
-            "needReview": 0,
+            "need_review": 0,
             "failed": 0,
-            "averageConfidence": 0,
+            "average_confidence": 0,
         },
         "errors": error_dicts,
     }

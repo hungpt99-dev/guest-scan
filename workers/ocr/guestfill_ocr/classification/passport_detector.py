@@ -25,7 +25,7 @@ def detect_passport_layout(gray: np.ndarray) -> dict:
         signals.append("LARGE_TEXT_TOP")
         confidence += 0.2
 
-    if confidence >= 0.5:
+    if confidence >= 0.3:
         is_passport = True
 
     return {
