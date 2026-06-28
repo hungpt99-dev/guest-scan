@@ -136,6 +136,7 @@ def select_best_candidate_with_engine(
     timeout: int = 8,
     prefer_paddleocr: bool = True,
     paddle_upscale: float = 1.5,
+    languages: list[str] | None = None,
 ) -> tuple[OcrCandidate | None, list[str], str]:
     warnings: list[str] = []
     engine_used = "tesseract"
@@ -156,8 +157,30 @@ def select_best_candidate_with_engine(
             if best_candidate and len(best_candidate.cleaned_lines) >= 2:
                 engine_used = "paddleocr"
                 return best_candidate, warnings, engine_used
+            for c in candidates:
+                c.raw_text = ""
+                c.cleaned_lines = []
+                c.ocr_confidence = None
+            warnings.append("PADDLE_OCR_POOR_RESULT")
+
+            if languages:
+                multi_candidate, multi_warnings, multi_engine = _try_multi_lang_candidates(
+                    candidates, languages, timeout, paddle_upscale
+                )
+                if multi_candidate and len(multi_candidate.cleaned_lines) >= 2:
+                    warnings.extend(multi_warnings)
+                    return multi_candidate, warnings, multi_engine
+                warnings.extend(multi_warnings)
         else:
             warnings.append("PADDLE_OCR_FAILED")
+            if languages:
+                multi_candidate, multi_warnings, multi_engine = _try_multi_lang_candidates(
+                    candidates, languages, timeout, paddle_upscale
+                )
+                if multi_candidate and len(multi_candidate.cleaned_lines) >= 2:
+                    warnings.extend(multi_warnings)
+                    return multi_candidate, warnings, multi_engine
+                warnings.extend(multi_warnings)
     else:
         if prefer_paddleocr:
             warnings.append("PADDLE_OCR_UNAVAILABLE")
@@ -172,6 +195,66 @@ def select_best_candidate_with_engine(
     warnings.extend(sel_warnings)
 
     return best_candidate, warnings, engine_used
+
+
+def _try_multi_lang_candidates(
+    candidates: list[OcrCandidate],
+    languages: list[str],
+    timeout: int,
+    upscale_factor: float,
+) -> tuple[OcrCandidate | None, list[str], str]:
+    warnings: list[str] = []
+    best_overall: OcrCandidate | None = None
+    best_score_val = float("-inf")
+    best_lang = languages[0]
+
+    for lang in languages:
+        for candidate in candidates:
+            candidate.raw_text = ""
+            candidate.cleaned_lines = []
+            candidate.ocr_confidence = None
+
+            result = run_paddleocr_mrz_with_details(
+                candidate.image, timeout=timeout, lang=lang, upscale_factor=upscale_factor
+            )
+            if result.is_ok():
+                raw_text, details = result.unwrap()
+                joined = "\n".join(raw_text) if isinstance(raw_text, list) else str(raw_text)
+                if joined.strip():
+                    temp = OcrCandidate(
+                        image=candidate.image,
+                        psm=candidate.psm,
+                        preprocessing=candidate.preprocessing,
+                        crop_source=candidate.crop_source,
+                        crop_ratio=candidate.crop_ratio,
+                    )
+                    temp.raw_text = joined
+                    temp.cleaned_lines = clean_mrz_text(joined)
+                    flat_details = [item for sublist in details for item in sublist]
+                    temp.ocr_confidence = compute_average_confidence(flat_details) if flat_details else 0.0
+                    line1 = temp.cleaned_lines[0] if len(temp.cleaned_lines) >= 1 else None
+                    line2 = temp.cleaned_lines[1] if len(temp.cleaned_lines) >= 2 else None
+                    temp.score = score_candidate(temp, line1, line2)
+                    if temp.score > best_score_val:
+                        best_score_val = temp.score
+                        best_overall = temp
+                        best_lang = lang
+                        break
+
+            if best_overall:
+                break
+
+    if best_overall:
+        for c in candidates:
+            c.raw_text = best_overall.raw_text
+            c.cleaned_lines = best_overall.cleaned_lines
+            c.ocr_confidence = best_overall.ocr_confidence
+            c.score = best_overall.score
+        warnings.append(f"PADDLE_OCR_LANG_{best_lang.upper()}")
+        return best_overall, warnings, "paddleocr"
+
+    warnings.append("PADDLE_OCR_MULTI_LANG_FAILED")
+    return None, warnings, "tesseract"
 
 
 def try_multi_lang_paddleocr(

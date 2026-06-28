@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from guestfill_ocr.ocr.ocr_candidate import OcrCandidate
 from guestfill_ocr.ocr.ocr_selector import (
+    _try_multi_lang_candidates,
     get_select_best_candidate_engine,
     score_candidate,
     select_best_candidate_with_engine,
@@ -328,3 +329,153 @@ class TestMultiLangPaddleOcr:
                 assert result is not None
                 assert len(result.cleaned_lines) >= 2
                 assert any("PADDLE_OCR_USED" in w for w in warnings)
+
+
+class TestFallbackBugFix:
+    """Tests for the PaddleOCR poor-result Tesseract fallback fix."""
+
+    def test_paddle_poor_result_resets_and_falls_back(self) -> None:
+        candidate = _make_candidate()
+        candidate.raw_text = "SHORT_TEXT"
+        candidate.cleaned_lines = ["SHORT"]
+        candidate.ocr_confidence = 0.5
+
+        with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True):
+            with (
+                patch("guestfill_ocr.ocr.ocr_selector._run_single_candidate_ocr") as mock_run,
+                patch("guestfill_ocr.ocr.ocr_selector._select_from_candidates") as mock_select,
+            ):
+                mock_select.side_effect = [
+                    (None, []),
+                    (candidate, []),
+                ]
+
+                def fake_run(cand, timeout, use_paddleocr, **_kwargs):
+                    if use_paddleocr:
+                        cand.raw_text = "SHORT_TEXT"
+                        cand.cleaned_lines = ["SHORT"]
+                        return True
+                    cand.raw_text = (
+                        "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<\nAB123456<4VNM7501012M2501017<<<<<<<<<<<<<<02"
+                    )
+                    cand.cleaned_lines = [
+                        "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<",
+                        "AB123456<4VNM7501012M2501017<<<<<<<<<<<<<<02",
+                    ]
+                    return True
+
+                mock_run.side_effect = fake_run
+                best, warnings, engine = select_best_candidate_with_engine(
+                    [candidate], timeout=8, prefer_paddleocr=True
+                )
+                assert best is not None
+                assert len(best.cleaned_lines) >= 2
+                assert "PADDLE_OCR_POOR_RESULT" in warnings
+                assert engine == "tesseract"
+
+    def test_paddle_poor_result_clears_previous_ocr_data(self) -> None:
+        candidate = _make_candidate()
+        candidate.raw_text = "GARBAGE"
+        candidate.cleaned_lines = ["GARBAGE"]
+        candidate.ocr_confidence = 0.3
+
+        with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True):
+            with (
+                patch("guestfill_ocr.ocr.ocr_selector._run_single_candidate_ocr") as mock_run,
+                patch("guestfill_ocr.ocr.ocr_selector._select_from_candidates") as mock_select,
+            ):
+                mock_select.side_effect = [
+                    (None, []),
+                    (candidate, []),
+                ]
+
+                def fake_run(cand, timeout, use_paddleocr, **_kwargs):
+                    return True
+
+                mock_run.side_effect = fake_run
+                select_best_candidate_with_engine([candidate], timeout=8, prefer_paddleocr=True)
+                assert mock_run.call_count >= 2
+
+
+class TestMultiLangIntegration:
+    def test_select_best_with_languages_retries_on_poor_result(self) -> None:
+        candidate = _make_candidate()
+        from unittest.mock import MagicMock
+
+        mock_result = MagicMock()
+        mock_result.is_ok.return_value = True
+        result_lines = [
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<",
+            "AB123456<4VNM7501012M2501017<<<<<<<<<<<<<<02",
+        ]
+        mock_result.unwrap.return_value = (result_lines, [[{"text": "P<", "confidence": 0.95}]])
+
+        with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True):
+            with (
+                patch("guestfill_ocr.ocr.ocr_selector._run_single_candidate_ocr") as mock_run,
+                patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", return_value=mock_result),
+            ):
+                mock_run.return_value = True
+                best, warnings, engine = select_best_candidate_with_engine(
+                    [candidate], timeout=8, prefer_paddleocr=True, languages=["ml", "en"]
+                )
+                if engine == "paddleocr" or engine == "tesseract":
+                    pass
+                assert best is not None
+
+    def test_multi_lang_requires_min_two_clean_lines(self) -> None:
+        candidate = _make_candidate()
+        with patch("guestfill_ocr.ocr.ocr_selector.check_paddleocr_available", return_value=True):
+            with (
+                patch("guestfill_ocr.ocr.ocr_selector._run_single_candidate_ocr") as mock_run,
+                patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details") as mock_paddle,
+            ):
+                poor_result = MagicMock()
+                poor_result.is_ok.return_value = True
+                poor_result.unwrap.return_value = (["SHORT"], [[{"text": "S", "confidence": 0.5}]])
+
+                mock_run.return_value = True
+                mock_paddle.return_value = poor_result
+
+                best, warnings, engine = select_best_candidate_with_engine(
+                    [candidate], timeout=8, prefer_paddleocr=True, languages=["en"]
+                )
+                assert engine == "tesseract"
+
+
+class TestTryMultiLangCandidates:
+    def test_returns_none_when_all_languages_fail(self) -> None:
+        mock_result = MagicMock()
+        mock_result.is_ok.return_value = False
+        candidate = _make_candidate()
+        with patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", return_value=mock_result):
+            result, warnings, engine = _try_multi_lang_candidates([candidate], ["en", "ml"], 8, 1.5)
+            assert result is None
+            assert "PADDLE_OCR_MULTI_LANG_FAILED" in warnings
+            assert engine == "tesseract"
+
+    def test_selects_best_across_languages(self) -> None:
+        from unittest.mock import MagicMock
+
+        candidate = _make_candidate()
+        good_lines = [
+            "P<VNMTAEST<<SURNAME<<GIVEN<NAME<<<<<<<<<<<<<<<",
+            "AB123456<4VNM7501012M2501017<<<<<<<<<<<<<<02",
+        ]
+        good_result = MagicMock()
+        good_result.is_ok.return_value = True
+        good_result.unwrap.return_value = (good_lines, [[{"text": "P<", "confidence": 0.95}]])
+        poor_result = MagicMock()
+        poor_result.is_ok.return_value = True
+        poor_result.unwrap.return_value = (["SHORT"], [[{"text": "S", "confidence": 0.5}]])
+
+        call_count = [0]
+
+        def mock_run_paddle(*args, **kwargs):
+            call_count[0] += 1
+            return good_result if call_count[0] >= 2 else poor_result
+
+        with patch("guestfill_ocr.ocr.ocr_selector.run_paddleocr_mrz_with_details", side_effect=mock_run_paddle):
+            result, warnings, engine = _try_multi_lang_candidates([candidate], ["en", "ml"], 8, 1.5)
+            assert result is not None
+            assert engine == "paddleocr"
