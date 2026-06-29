@@ -1,4 +1,8 @@
-"""Process a single document through the OCR pipeline."""
+"""Process a single document through the OCR pipeline.
+
+Global OCR pipeline with adaptive preprocessing, language resolution,
+multi-engine selection, and transliteration support.
+"""
 
 from guestfill_ocr.classification.document_classifier import classify_document
 from guestfill_ocr.common.result import Err, Ok, Result
@@ -15,7 +19,7 @@ from guestfill_ocr.id_card.id_card_ocr import process_id_card
 from guestfill_ocr.image.image_loader import load_image
 from guestfill_ocr.image.orientation import fix_exif_orientation
 from guestfill_ocr.image.paddleocr_preprocess import preprocess_for_paddleocr
-from guestfill_ocr.image.preprocess import preprocess_pipeline, to_grayscale
+from guestfill_ocr.image.preprocess import adaptive_preprocess, to_grayscale
 from guestfill_ocr.image.quality_analyzer import analyze_quality
 from guestfill_ocr.image.resize import resize_keep_ratio
 from guestfill_ocr.ocr.ocr_candidate import generate_ocr_candidates
@@ -23,22 +27,38 @@ from guestfill_ocr.ocr.ocr_selector import (
     check_paddleocr_available,
     select_best_candidate_with_engine,
 )
-from guestfill_ocr.ocr.paddleocr_engine import SUPPORTED_PPOCR_LANGS
+from guestfill_ocr.ocr.paddleocr_engine import (
+    SUPPORTED_PPOCR_LANGS,
+    get_ocr_languages_for_country,
+)
 from guestfill_ocr.passport.mrz_cropper import generate_all_candidates
 from guestfill_ocr.passport.mrz_parser import detect_mrz_format, parse_mrz_lines
 from guestfill_ocr.passport.mrz_repair import try_repair_mrz
 from guestfill_ocr.passport.passport_visual_ocr import run_passport_visual_ocr
 
 
-def _build_paddle_languages(options: dict) -> list[str]:
+def _build_paddle_languages(options: dict, country_code: str | None = None) -> list[str]:
     requested = options.get("paddleOcrLanguages")
     if requested and isinstance(requested, list) and len(requested) > 0:
         valid = [lang for lang in requested if lang in SUPPORTED_PPOCR_LANGS]
         if valid:
             return valid
+    if country_code:
+        return get_ocr_languages_for_country(country_code)
     languages = ["ml"]
     languages.extend(lang for lang in SUPPORTED_PPOCR_LANGS if lang != "ml")
     return languages
+
+
+def _resolve_country_from_mrz(candidates: list) -> str | None:
+    for c in candidates:
+        if hasattr(c, "cleaned_lines") and c.cleaned_lines:
+            for line in c.cleaned_lines:
+                if len(line) >= 5:
+                    country = line[2:5].replace("<", "")
+                    if country and len(country) == 3 and country.isalpha():
+                        return country
+    return None
 
 
 def process_document(file_path: str, options: dict) -> Result:
@@ -67,6 +87,7 @@ def process_document(file_path: str, options: dict) -> Result:
     is_id_card = False
     engine_used = "tesseract"
     candidate_warnings: list[str] = []
+    detected_country: str | None = None
 
     if doc_type == "PASSPORT":
         prefer_paddle = options.get("preferPaddleocr", True)
@@ -77,7 +98,7 @@ def process_document(file_path: str, options: dict) -> Result:
             processed_gray = to_grayscale(processed)
             mrz_candidates = generate_all_candidates(processed_gray)
         else:
-            processed = preprocess_pipeline(gray)
+            processed = adaptive_preprocess(gray, quality)
             mrz_candidates = generate_all_candidates(processed)
         ocr_candidate_inputs = [
             {
@@ -103,6 +124,8 @@ def process_document(file_path: str, options: dict) -> Result:
             line2 = raw_lines[1] if len(raw_lines) >= 2 else ""
             line3 = raw_lines[2] if len(raw_lines) >= 3 else None
 
+            detected_country = _resolve_country_from_mrz([best_candidate])
+
             repaired = try_repair_mrz(line1, line2, line3)
             repaired_lines, repair_warnings = repaired
 
@@ -126,7 +149,7 @@ def process_document(file_path: str, options: dict) -> Result:
 
         if result_fields is None:
             if options.get("enablePassportVisualOcr", True):
-                visual_result = run_passport_visual_ocr(file_path)
+                visual_result = run_passport_visual_ocr(file_path, country_code=detected_country)
                 if visual_result.is_ok():
                     visual_used = True
                     visual_fields = visual_result.unwrap()

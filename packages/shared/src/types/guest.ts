@@ -30,6 +30,7 @@ export type GuestRow = {
   status: GuestStatus;
   confidenceScore?: number;
   confidenceLevel?: ConfidenceLevel;
+  fieldConfidence?: Record<string, number>;
   fillStatus: import("./fill").FillStatus;
   note?: string;
   ocrWarning?: string;

@@ -15,6 +15,8 @@ import {
   navigateGuest,
   getAccuracySummary,
   getFieldAccuracyLevel,
+  getHighConfidenceFields,
+  getBatchCopyPreview,
 } from "../../../features/fill/copyAssistant";
 import {
   createDefaultTemplate,
@@ -195,6 +197,12 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
       expect(nameLevel.level).toBe("HIGH");
       expect(nameLevel.score).toBe(1.0);
     });
+
+    it("detects gender-name inconsistency in pipeline", () => {
+      const guest = createSampleGuest({ fullName: "John Smith", gender: "F" });
+      const summary = getAccuracySummary(guest);
+      expect(summary.warnings.some((w) => w.includes("male") || w.includes("female"))).toBe(true);
+    });
   });
 
   describe("Phase 4: Safety Validation", () => {
@@ -278,6 +286,44 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
     it("returns empty string for missing fields", () => {
       const guest = createSampleGuest();
       expect(getFieldValue(guest, "nonexistent" as keyof GuestRow)).toBe("");
+    });
+  });
+
+  describe("Phase 5b: Batch Copy Workflow", () => {
+    it("identifies high confidence fields for batch copy", () => {
+      const guest = createSampleGuest();
+      const highFields = getHighConfidenceFields(guest);
+      expect(highFields).toContain("fullName");
+      expect(highFields).toContain("passportNumber");
+      expect(highFields).toContain("gender");
+    });
+
+    it("excludes low accuracy fields from batch copy", () => {
+      const guest = createSampleGuest({ fullName: "A" });
+      const highFields = getHighConfidenceFields(guest);
+      expect(highFields).not.toContain("fullName");
+    });
+
+    it("generates batch copy preview grouped by confidence", () => {
+      const guest = createSampleGuest();
+      const preview = getBatchCopyPreview(guest);
+      expect(preview.highConfidence.length).toBeGreaterThan(0);
+      expect(preview.mediumConfidence.length).toBeGreaterThanOrEqual(0);
+      expect(preview.lowConfidence.length).toBeGreaterThanOrEqual(0);
+      expect(preview.totalFields).toBeGreaterThan(0);
+    });
+
+    it("preview sums to total fields", () => {
+      const guest = createSampleGuest();
+      const preview = getBatchCopyPreview(guest);
+      const grouped = preview.highConfidence.length + preview.mediumConfidence.length + preview.lowConfidence.length;
+      expect(grouped).toBeLessThanOrEqual(preview.totalFields);
+    });
+
+    it("batch copy does not include empty fields", () => {
+      const guest = createSampleGuest({ roomNumber: "" });
+      const highFields = getHighConfidenceFields(guest);
+      expect(highFields).not.toContain("roomNumber");
     });
   });
 

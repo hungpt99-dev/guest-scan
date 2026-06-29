@@ -185,6 +185,44 @@ function normalizeHeaderName(name: string): string {
   return columnMap[cleaned] || name;
 }
 
+const FIELD_CONFIDENCE_FIELDS = [
+  "fullName",
+  "surname",
+  "givenName",
+  "passportNumber",
+  "idNumber",
+  "nationality",
+  "dateOfBirth",
+  "gender",
+  "passportExpiryDate",
+  "idExpiryDate",
+  "issuingCountry",
+  "issuingAuthority",
+  "roomNumber",
+  "arrivalDate",
+  "departureDate",
+];
+
+function parseFieldConfidence(raw: RawExcelRow, headerMap: Record<string, string>): Record<string, number> | undefined {
+  const conf: Record<string, number> = {};
+  let hasAny = false;
+  for (const field of FIELD_CONFIDENCE_FIELDS) {
+    const confKey = `${field}_conf`;
+    const h = headerMap[confKey];
+    if (h) {
+      const val = raw[h];
+      if (val !== undefined && val !== null) {
+        const num = parseFloat(String(val));
+        if (!isNaN(num) && num >= 0 && num <= 1) {
+          conf[field] = num;
+          hasAny = true;
+        }
+      }
+    }
+  }
+  return hasAny ? conf : undefined;
+}
+
 function normalizeGuestRow(
   raw: RawExcelRow,
   headerMap: Record<string, string>,
@@ -205,6 +243,7 @@ function normalizeGuestRow(
     passportNumber: get("passportNumber"),
     idNumber: get("idNumber"),
   });
+  const fieldConfidence = parseFieldConfidence(raw, headerMap);
 
   return {
     id: crypto.randomUUID(),
@@ -230,6 +269,7 @@ function normalizeGuestRow(
     status,
     confidenceScore: parseFloat(get("confidenceScore")) || undefined,
     confidenceLevel: normalizeConfidence(get("confidenceLevel")),
+    fieldConfidence,
     fillStatus: "PENDING",
     note: get("note"),
     ocrWarning: get("ocrWarning"),

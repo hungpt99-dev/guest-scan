@@ -18,7 +18,7 @@ function makeGuest(overrides?: Partial<GuestRow>): GuestRow {
     sessionId: "s1",
     rowId: "r1",
     fullName: "John Doe",
-    passportNumber: "AB123456",
+    passportNumber: "347777777",
     documentType: "PASSPORT",
     gender: "M",
     status: "READY",

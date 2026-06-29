@@ -1,10 +1,71 @@
-"""Passport visual zone OCR fallback when MRZ is unavailable."""
+"""Passport visual zone OCR with multi-language support.
+
+Extracts guest information from the visual zone (non-MRZ area) of passports.
+Supports multiple languages via Tesseract language packs and transliteration
+of non-Latin scripts to Latin characters.
+
+Field localization patterns are provided for common passport layouts.
+"""
+
+import re
 
 from guestfill_ocr.common.errors import OcrError
 from guestfill_ocr.common.result import Err, Ok, Result
+from guestfill_ocr.config.language_resolver import (
+    resolve_ocr_languages,
+    resolve_tesseract_lang,
+)
+from guestfill_ocr.extraction.transliteration import transliterate
 from guestfill_ocr.ocr.tesseract_engine import run_tesseract_ocr
 from guestfill_ocr.passport.mrz_parser import parse_mrz_lines
 from guestfill_ocr.passport.mrz_repair import try_repair_mrz
+
+FIELD_PATTERNS: dict[str, dict] = {
+    "PASSPORT_NUMBER": {
+        "patterns": [
+            r"PASSPORT\s*(?:NO|N[.:]?|#)?\s*[A-Z]?\s*[A-Z]{3}\s*([A-Z0-9]+)",
+            r"PASSPORT\s*N[O°]?[.:]?\s*([A-Z0-9]+)",
+            r"(?:PASSPORT\s*NO\.?|PASSPORT\s*#|DOCUMENT\s*NO\.?|DOCUMENT\s*#)\s*([A-Z0-9]+)",
+            r"NO\.?\s*([A-Z0-9]{5,15})\b",
+        ],
+    },
+    "SURNAME": {
+        "patterns": [
+            r"(?:SURNAME|SUR\b|SURNOM|APELLIDO|NACHNAME|COGNOME|SOBRENOME|姓氏|ФАМИЛИЯ|姓)\s*[.:]?\s*(.+)",
+        ],
+    },
+    "GIVEN_NAME": {
+        "patterns": [
+            r"GIVEN\s*NAMES?[.:]?\s*(.+)",
+            r"(?:GIVEN\s*NAMES?|PRENOM|NOMBRE|VORNAME|NOME|NOME\s*PROPRIO|名字|ИМЯ|名)\s*[.:]?\s*(.+)",
+        ],
+    },
+    "NATIONALITY": {
+        "patterns": [
+            r"NATIONALITY[.:]?\s*([A-Z]+)",
+            r"(?:NATIONALITY|NATIONALITÉ|NACIONALIDAD|STAATSANGEHÖRIGKEIT|NAZIONALITÀ|国籍|ГРАЖДАНСТВО)\s*[.:]?\s*([A-Z]+)",
+        ],
+    },
+    "DATE_OF_BIRTH": {
+        "patterns": [
+            r"DATE\s*OF\s*BIRTH[.:]?\s*([\d/.-]+)",
+            r"(?:DATE\s*OF\s*BIRTH|DATE\s*DE\s*NAISSANCE|FECHA\s*DE\s*NACIMIENTO|GEBURTSDATUM|DATA\s*DI\s*NASCITA|出生日期|ДАТА\s*РОЖДЕНИЯ)\s*[.:]?\s*([\d/.-]+)",
+        ],
+    },
+    "SEX": {
+        "patterns": [
+            r"\bSEX[.:]?\s*([MF])",
+            r"(?:SEX|SEXE|SEXO|GESCHLECHT|SESSO|性别|ПОЛ)\s*[.:]?\s*([MF])",
+        ],
+    },
+    "EXPIRY": {
+        "patterns": [
+            r"DATE\s*OF\s*EXPIRY[.:]?\s*([\d/.-]+)",
+            r"(?:DATE\s*OF\s*EXPIRY|DATE\s*D[''']?EXPIRATION|FECHA\s*DE\s*VENCIMIENTO|"
+            r"ABLAUF DATUM|DATA\s*DI\s*SCADENZA|有效期限|ДАТА\s*ИСТЕЧЕНИЯ)\s*[.:]?\s*([\d/.-]+)",
+        ],
+    },
+}
 
 
 def _clean_ocr_line(raw: str) -> str:
@@ -55,9 +116,6 @@ def _pad_mrz_line(line: str, target: int) -> str:
     if len(line) == target:
         return line
     if len(line) > target:
-        trailing_noise = line[target:]
-        if all(ch.isalpha() for ch in trailing_noise):
-            return line[:target]
         return line[:target]
     if len(line) < target:
         return line + "<" * (target - len(line))
@@ -83,13 +141,32 @@ def _clean_mrz_field(value: str) -> str:
     return " ".join(clean_parts) if clean_parts else ""
 
 
-def run_passport_visual_ocr(image_path: str) -> Result:
+def run_passport_visual_ocr(
+    image_path: str,
+    country_code: str | None = None,
+) -> Result:
     try:
-        ocr_result = run_tesseract_ocr(image_path, psm=3)
+        tess_lang = resolve_tesseract_lang(country_code)
+        ocr_result = run_tesseract_ocr(image_path, psm=3, lang=tess_lang)
         if ocr_result.is_err():
-            return Err(ocr_result.unwrap_err())
+            if tess_lang != "eng":
+                ocr_result = run_tesseract_ocr(image_path, psm=3, lang="eng")
+            if ocr_result.is_err():
+                return Err(ocr_result.unwrap_err())
+
         text = ocr_result.unwrap()
-        fields = _extract_visual_fields(text)
+        fields = _extract_visual_fields(text, country_code=country_code)
+
+        if country_code:
+            resolution = resolve_ocr_languages(country_code)
+            if resolution.script not in ("latin",):
+                for key in ("surname", "given_name", "full_name"):
+                    val = fields.get(key, "")
+                    if val and not all(c.isascii() for c in val):
+                        tr = transliterate(val, resolution.script)
+                        if tr.confidence > 0.5:
+                            fields[key] = tr.latin
+                            fields.setdefault("_transliterated", {})[key] = True
 
         mrz_lines = _find_mrz_from_text(text)
         if len(mrz_lines) >= 2:
@@ -119,9 +196,7 @@ def run_passport_visual_ocr(image_path: str) -> Result:
         return Err(OcrError("OCR_FAILED", f"Visual OCR failed: {e}", source_file=image_path))
 
 
-def _extract_visual_fields(text: str) -> dict:
-    import re
-
+def _extract_visual_fields(text: str, country_code: str | None = None) -> dict:
     fields: dict = {
         "surname": "",
         "given_name": "",
@@ -137,29 +212,47 @@ def _extract_visual_fields(text: str) -> dict:
     for i, line in enumerate(lines):
         line_upper = line.strip().upper()
 
-        m = re.search(r"PASSPORT\s*(?:NO|N[.:]?|#)?\s*[A-Z]?\s*[A-Z]{3}\s*([A-Z0-9]+)", line_upper)
-        if m:
-            raw = m.group(1)
-            cleaned = re.sub(r"[^A-Z0-9]", "", raw)
-            if len(cleaned) >= 6:
-                fields["passport_number"] = cleaned
+        pattern_keys = ("PASSPORT_NUMBER", "SURNAME", "GIVEN_NAME", "NATIONALITY", "DATE_OF_BIRTH", "SEX", "EXPIRY")
+        for pattern_key in pattern_keys:
+            field_key = {
+                "PASSPORT_NUMBER": "passport_number",
+                "SURNAME": "surname",
+                "GIVEN_NAME": "given_name",
+                "NATIONALITY": "nationality",
+                "DATE_OF_BIRTH": "date_of_birth",
+                "SEX": "gender",
+                "EXPIRY": "passport_expiry_date",
+            }[pattern_key]
 
-        m = re.search(r"(?:SURNAME|SUR\b)\s*[.:]?\s*(.+)", line_upper)
-        if m:
-            val = m.group(1).strip()
-            val = re.sub(r"[^A-Z ]", "", val)
-            if val and val.upper() not in ("S", "NAME", "NAMES", ""):
-                fields["surname"] = val
+            if fields[field_key]:
+                continue
 
-        m = re.search(r"GIVEN\s*NAMES?[.:]?\s*(.+)", line_upper)
-        if m:
-            val = m.group(1).strip()
-            val = re.sub(r"[^A-Z ]", "", val)
-            if val and val.upper() not in ("S", "NAME", "NAMES", ""):
-                fields["given_name"] = val
+            for pat in FIELD_PATTERNS[pattern_key]["patterns"]:
+                m = re.search(pat, line_upper)
+                if m:
+                    val = m.group(1).strip()
+                    if pattern_key == "PASSPORT_NUMBER":
+                        cleaned = re.sub(r"[^A-Z0-9]", "", val)
+                        if len(cleaned) >= 6:
+                            fields[field_key] = cleaned
+                    elif pattern_key in ("SURNAME", "GIVEN_NAME"):
+                        val = re.sub(r"[^A-Z a-zA-ZÀ-ÿ]", "", val).strip()
+                        if val and val.upper() not in ("S", "NAME", "NAMES", ""):
+                            fields[field_key] = val
+                    elif pattern_key == "NATIONALITY":
+                        if len(val) <= 5:
+                            fields[field_key] = val
+                    elif pattern_key == "DATE_OF_BIRTH":
+                        fields[field_key] = val
+                    elif pattern_key == "SEX":
+                        if val in ("M", "F"):
+                            fields[field_key] = val
+                    elif pattern_key == "EXPIRY":
+                        fields[field_key] = val
+                    break
 
         if not fields["surname"] and i + 1 < len(lines):
-            m = re.search(r"(?:HO|SURNAME)\s*/?\s*(?:SURNAME)?\s*$", line_upper)
+            m = re.search(r"(?:HO|SURNAME|SURNOM|APELLIDO|NACHNAME)\s*/?\s*(?:SURNAME)?\s*$", line_upper)
             if m:
                 next_line = lines[i + 1].strip().upper()
                 next_val = re.sub(r"[^A-Z ]", "", next_line)
@@ -167,7 +260,7 @@ def _extract_visual_fields(text: str) -> dict:
                     fields["surname"] = next_val
 
         if not fields["given_name"] and i + 1 < len(lines):
-            m = re.search(r"GIVEN\s*NAMES?\s*$", line_upper)
+            m = re.search(r"(?:GIVEN\s*NAMES?|PRENOM|NOMBRE|VORNAME|NOME)\s*$", line_upper)
             if not m:
                 m = re.search(r"TEN\s*/?\s*GIVEN", line_upper)
             if m:
@@ -176,33 +269,17 @@ def _extract_visual_fields(text: str) -> dict:
                 if next_val and len(next_val) <= 30:
                     fields["given_name"] = next_val
 
-        m = re.search(r"NATIONALITY[.:]?\s*([A-Z]+)", line_upper)
-        if m:
-            val = m.group(1)
-            if len(val) <= 5:
-                fields["nationality"] = val
-
-        m = re.search(r"DATE\s*OF\s*BIRTH[.:]?\s*([\d/.-]+)", line_upper)
-        if m:
-            fields["date_of_birth"] = m.group(1).strip()
         if not fields["date_of_birth"]:
-            m = re.search(r"DATE\s*OF\s*BIRTH", line_upper)
+            m = re.search(r"DATE\s*OF\s*BIRTH|DATE\s*DE\s*NAISSANCE|FECHA\s*DE\s*NACIMIENTO|GEBURTSDATUM", line_upper)
             if m and i + 1 < len(lines):
                 next_line = lines[i + 1].strip()
                 dm = re.search(r"(\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4})", next_line)
                 if dm:
                     fields["date_of_birth"] = dm.group(1)
 
-        m = re.search(r"\bSEX[.:]?\s*([MF])", line_upper)
-        if m:
-            fields["gender"] = m.group(1)
-
-        m = re.search(r"DATE\s*OF\s*EXPIRY[.:]?\s*([\d/.-]+)", line_upper)
-        if m:
-            fields["passport_expiry_date"] = m.group(1).strip()
-
     if fields["surname"] and fields["given_name"]:
         fields["full_name"] = f"{fields['surname']} {fields['given_name']}"
     elif fields["surname"]:
         fields["full_name"] = fields["surname"]
+
     return fields

@@ -29,7 +29,7 @@ describe("Fill Workflow Integration", () => {
       fullName: "John Doe",
       surname: "Doe",
       givenName: "John",
-      passportNumber: "AB123456",
+      passportNumber: "347777777",
       idNumber: "",
       nationality: "USA",
       dateOfBirth: "1990-06-15",
@@ -113,7 +113,7 @@ describe("Fill Workflow Integration", () => {
 
     // Step 4: Get field values
     expect(getFieldValue(guest, "fullName")).toBe("John Doe");
-    expect(getFieldValue(guest, "passportNumber")).toBe("AB123456");
+    expect(getFieldValue(guest, "passportNumber")).toBe("347777777");
 
     // Step 5: Apply transforms for each mapping
     for (const mapping of template.mappings) {
@@ -191,7 +191,7 @@ describe("Fill Workflow Integration", () => {
   });
 
   it("requires field accuracy for safe filling", () => {
-    const validGuest: GuestRow = { ...guest, fullName: "John Doe", passportNumber: "AB123456" };
+    const validGuest: GuestRow = { ...guest, fullName: "John Doe", passportNumber: "347777777" };
     expect(checkFieldAccuracy(validGuest).passed).toBe(true);
 
     const invalidGuest: GuestRow = { ...guest, fullName: "A", passportNumber: "0" };

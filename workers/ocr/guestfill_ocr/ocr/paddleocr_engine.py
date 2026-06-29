@@ -18,6 +18,11 @@ import numpy as np
 
 from guestfill_ocr.common.errors import OcrError
 from guestfill_ocr.common.result import Err, Ok, Result
+from guestfill_ocr.config.language_resolver import (
+    get_region_priority_languages,
+    resolve_ocr_languages,
+    resolve_paddleocr_lang,
+)
 
 _PPOCR_AVAILABLE = False
 _PPOCR_CHECKED = False
@@ -126,26 +131,19 @@ def reset_paddleocr_instance(lang: str | None = None) -> None:
 
 
 def resolve_ocr_lang(country_code: str | None = None) -> str:
-    if country_code is None:
-        return DEFAULT_PPOCR_LANG
-    country_to_lang: dict[str, str] = {
-        "CHN": "ch",
-        "JPN": "ja",
-        "KOR": "ko",
-        "FRA": "fr",
-        "DEU": "de",
-        "ESP": "es",
-        "ITA": "it",
-        "PRT": "pt",
-        "RUS": "ru",
-        "ARE": "ar",
-        "SAU": "ar",
-        "TUR": "tr",
-        "NLD": "nl",
-        "POL": "pl",
-        "VNM": "vi",
-    }
-    return country_to_lang.get(country_code, DEFAULT_PPOCR_LANG)
+    return resolve_paddleocr_lang(country_code)
+
+
+def resolve_ocr_lang_enhanced(country_code: str | None = None) -> str:
+    resolution = resolve_ocr_languages(country_code)
+    return resolution.primary
+
+
+def get_ocr_languages_for_country(country_code: str | None = None) -> list[str]:
+    if country_code:
+        resolution = resolve_ocr_languages(country_code)
+        return [resolution.primary] + [lang for lang in resolution.alternatives if lang != resolution.primary]
+    return get_region_priority_languages("latin")
 
 
 def _prepare_image(image: np.ndarray | str, upscale_factor: float = 1.0) -> Result:

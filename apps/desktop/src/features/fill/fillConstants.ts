@@ -21,6 +21,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS = {
   nextField: "Ctrl+Shift+N",
   previousField: "Ctrl+Shift+P",
   nextGuest: "Ctrl+Shift+G",
+  previousGuest: "Ctrl+Shift+H",
   markFilled: "Ctrl+Shift+F",
   markSkipped: "Ctrl+Shift+S",
   emergencyStop: "Ctrl+Alt+Esc",
