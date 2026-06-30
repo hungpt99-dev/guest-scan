@@ -53,6 +53,17 @@
     },
     "security": {
       "csp": null
-    }
+    },
+    "windows": [
+      {
+        "title": "GuestFill",
+        "width": 1200,
+        "height": 800,
+        "center": true,
+        "visible": true,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
   }
 }
