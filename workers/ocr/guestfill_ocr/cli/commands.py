@@ -1,11 +1,15 @@
 """CLI command definitions."""
 
 import argparse
+import logging
 import sys
+import traceback
 
 from guestfill_ocr.cli.request_reader import read_request
 from guestfill_ocr.cli.response_writer import write_response
 from guestfill_ocr.common.logging import setup_logging
+
+logger = logging.getLogger("guestfill_ocr.cli.commands")
 
 _FRIENDLY_ERROR_MESSAGES: dict[str, str] = {
     "NO_INPUT_FILES": "No input files were provided. Please select at least one file or folder.",
@@ -55,14 +59,54 @@ def _get_user_friendly_error(code: str, fallback: str) -> str:
     return _FRIENDLY_ERROR_MESSAGES.get(code, fallback)
 
 
+def _build_crash_response(job_id: str, exc: Exception) -> dict:
+    return {
+        "jobId": job_id,
+        "status": "FAILED",
+        "outputPath": None,
+        "summary": {
+            "total_files": 0,
+            "total_documents": 0,
+            "ready": 0,
+            "need_review": 0,
+            "failed": 0,
+            "average_confidence": 0,
+        },
+        "errors": [
+            {
+                "code": "OCR_WORKER_CRASHED",
+                "message": "The OCR worker crashed unexpectedly. Please try again with fewer files.",
+                "technical_detail": str(exc),
+            }
+        ],
+    }
+
+
+def _try_write_response(response_path: str, data: dict, job_id: str) -> None:
+    try:
+        write_response(response_path, data)
+    except Exception as e:
+        logger.error(
+            "Job %s | failed to write response file | path=%s error=%s",
+            job_id,
+            response_path,
+            e,
+        )
+
+
 def _handle_create_excel(request_path: str, response_path: str) -> int:
     logger = setup_logging()
-    logger.info("Starting OCR job")
+    logger.info(
+        "Worker started | request=%s response=%s",
+        request_path,
+        response_path,
+    )
 
     request_result = read_request(request_path)
 
     if request_result.is_err():
         err = request_result.unwrap_err()
+        logger.error("Request read failed | code=%s message=%s", err.code, err.message)
         response = {
             "jobId": "",
             "status": "FAILED",
@@ -83,19 +127,70 @@ def _handle_create_excel(request_path: str, response_path: str) -> int:
                 }
             ],
         }
-        write_response(response_path, response)
+        _try_write_response(response_path, response, "")
         return 1
 
     request = request_result.unwrap()
+    job_id = request.get("jobId", "unknown")
+    file_count = len(request.get("inputPaths", request.get("files", [])))
+    logger.info("Job %s | files=%d | importing modules", job_id, file_count)
 
-    from guestfill_ocr.main import process_ocr_job
+    try:
+        from guestfill_ocr.main import process_ocr_job
+    except Exception as exc:
+        logger.error(
+            "Job %s | module import failed | exception=%s traceback=%s",
+            job_id,
+            exc,
+            traceback.format_exc(),
+        )
+        response = {
+            "jobId": job_id,
+            "status": "FAILED",
+            "outputPath": None,
+            "summary": {
+                "total_files": 0,
+                "total_documents": 0,
+                "ready": 0,
+                "need_review": 0,
+                "failed": 0,
+                "average_confidence": 0,
+            },
+            "errors": [
+                {
+                    "code": "IMPORT_FAILED",
+                    "message": "OCR worker module failed to load.",
+                    "technical_detail": str(exc),
+                }
+            ],
+        }
+        _try_write_response(response_path, response, job_id)
+        return 1
 
-    result = process_ocr_job(request)
+    logger.info("Job %s | processing started", job_id)
+    try:
+        result = process_ocr_job(request)
+    except Exception as exc:
+        logger.error(
+            "Job %s | process_ocr_job raised | exception=%s",
+            job_id,
+            exc,
+            exc_info=True,
+        )
+        response = _build_crash_response(job_id, exc)
+        _try_write_response(response_path, response, job_id)
+        return 1
 
     if result.is_err():
         err = result.unwrap_err()
+        logger.error(
+            "Job %s | process_ocr_job returned error | code=%s message=%s",
+            job_id,
+            err.code,
+            err.message,
+        )
         response = {
-            "jobId": request.get("jobId", ""),
+            "jobId": job_id,
             "status": "FAILED",
             "outputPath": None,
             "summary": {
@@ -114,15 +209,15 @@ def _handle_create_excel(request_path: str, response_path: str) -> int:
                 }
             ],
         }
-        write_response(response_path, response)
+        _try_write_response(response_path, response, job_id)
         return 1
 
     response = result.unwrap()
-    write_response(response_path, response)
+    _try_write_response(response_path, response, job_id)
 
     if response.get("status") == "FAILED":
-        logger.error("OCR job failed")
+        logger.error("Job %s | completed with FAILED status", job_id)
         return 1
 
-    logger.info("OCR job completed successfully")
+    logger.info("Job %s | completed successfully", job_id)
     return 0

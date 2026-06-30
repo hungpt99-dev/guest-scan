@@ -10,6 +10,7 @@ PaddleOCR's multilingual model (lang='ml') and specific language models.
 from __future__ import annotations
 
 import concurrent.futures
+import logging
 import threading
 from typing import Any
 
@@ -23,6 +24,8 @@ from guestfill_ocr.config.language_resolver import (
     resolve_ocr_languages,
     resolve_paddleocr_lang,
 )
+
+logger = logging.getLogger("guestfill_ocr.paddleocr_engine")
 
 _PPOCR_AVAILABLE = False
 _PPOCR_CHECKED = False
@@ -100,24 +103,41 @@ def check_paddleocr_has_gpu() -> bool:
 
 
 def _get_paddleocr_instance(lang: str = DEFAULT_PPOCR_LANG, use_gpu: bool | None = None) -> Any:
-    global _PPOCR_INSTANCES
+    global _PPOCR_INSTANCES, _PPOCR_AVAILABLE, _PPOCR_CHECKED
     if lang not in _PPOCR_INSTANCES:
         with _PPOCR_INSTANCES_LOCK:
             if lang in _PPOCR_INSTANCES:
                 return _PPOCR_INSTANCES[lang]
-            from paddleocr import PaddleOCR
-
+            logger.info("Initializing PaddleOCR instance | lang=%s use_gpu=%s", lang, use_gpu)
             if use_gpu is None:
                 use_gpu = check_paddleocr_has_gpu()
-            _PPOCR_INSTANCES[lang] = PaddleOCR(
-                lang=lang,
-                use_angle_cls=False,
-                show_log=False,
-                use_gpu=use_gpu,
-                det_db_thresh=0.3,
-                det_db_box_thresh=0.5,
-                rec_batch_num=6,
-            )
+                logger.info("PaddleOCR GPU check | has_gpu=%s", use_gpu)
+            try:
+                from paddleocr import PaddleOCR
+
+                _PPOCR_INSTANCES[lang] = PaddleOCR(
+                    lang=lang,
+                    use_angle_cls=False,
+                    show_log=False,
+                    use_gpu=use_gpu,
+                    det_db_thresh=0.3,
+                    det_db_box_thresh=0.5,
+                    rec_batch_num=6,
+                )
+                logger.info("PaddleOCR instance created successfully | lang=%s", lang)
+            except Exception as e:
+                logger.error(
+                    "PaddleOCR constructor failed | lang=%s use_gpu=%s error=%s",
+                    lang,
+                    use_gpu,
+                    e,
+                    exc_info=True,
+                )
+                _PPOCR_AVAILABLE = False
+                _PPOCR_CHECKED = True
+                raise RuntimeError(
+                    f"PaddleOCR initialization failed for lang={lang}: {e}"
+                ) from e
     return _PPOCR_INSTANCES[lang]
 
 
