@@ -1,6 +1,25 @@
 import { isTauri, requireTauri } from "../lib/isTauri";
 import { logger } from "../lib/logger";
 import type { PreprocessedImage } from "./image_preprocessing_service";
+import {
+  MRZ_BOTTOM_PORTION_START,
+  MRZ_MIN_HEIGHT_RATIO,
+  MRZ_MAX_HEIGHT_RATIO,
+  MRZ_MIN_LINE_HEIGHT_PX,
+  TEXT_DENSITY_THRESHOLD,
+  PROJECTION_SMOOTH_WINDOW,
+  LINE_DETECTION_THRESHOLD,
+  DARK_LUMINANCE_THRESHOLD,
+  JPEG_SAVE_QUALITY,
+  MOCK_MRZ_VERTICAL_OFFSET,
+  MOCK_MRZ_FIXED_WIDTH,
+  MOCK_MRZ_DELAY_MS,
+  BAND_DENSITY_DIFF_THRESHOLD,
+  MRZ_CONFIDENCE_TD1,
+  MRZ_CONFIDENCE_TD2_TD3,
+  MRZ_CONFIDENCE_UNKNOWN,
+  MRZ_ASPECT_RATIO_THRESHOLD,
+} from "../config/constants";
 
 export type BoundingBox = {
   x: number;
@@ -29,13 +48,7 @@ export interface MrzDetectionService {
   detectMrzRegion(image: PreprocessedImage): Promise<MrzRegion>;
 }
 
-const MRZ_BOTTOM_PORTION_START = 0.65;
-const MRZ_MIN_HEIGHT_RATIO = 0.06;
-const MRZ_MAX_HEIGHT_RATIO = 0.35;
-const MRZ_MIN_LINE_HEIGHT_PX = 12;
-const TEXT_DENSITY_THRESHOLD = 0.12;
-const PROJECTION_SMOOTH_WINDOW = 3;
-const LINE_DETECTION_THRESHOLD = 0.2;
+
 
 export type TextBand = {
   startY: number;
@@ -66,7 +79,7 @@ export function computeHorizontalProjection(pixels: Uint8Array, width: number, h
       const g = pixels[idx + 1] ?? 0;
       const b = pixels[idx + 2] ?? 0;
       const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-      if (luminance < 128) darkPixels++;
+      if (luminance < DARK_LUMINANCE_THRESHOLD) darkPixels++;
     }
     projection[y] = darkPixels / width;
   }
@@ -169,7 +182,7 @@ export function selectMrzBand(
 
   candidates.sort((a, b) => {
     const densityDiff = b.peakDensity - a.peakDensity;
-    if (Math.abs(densityDiff) > 0.05) return densityDiff > 0 ? 1 : -1;
+    if (Math.abs(densityDiff) > BAND_DENSITY_DIFF_THRESHOLD) return densityDiff > 0 ? 1 : -1;
     return b.startY - a.startY;
   });
 
@@ -189,7 +202,7 @@ export function estimateLineCount(
   minLineHeight: number,
 ): number {
   const localProj = projection.slice(bandStart, bandEnd + 1);
-  const smoothed = smoothProjection(localProj, 3);
+  const smoothed = smoothProjection(localProj, PROJECTION_SMOOTH_WINDOW);
 
   let lineCount = 0;
   let inLine = false;
@@ -227,19 +240,19 @@ export function estimateLineCount(
  */
 export function detectMrzFormat(lineCount: number, bandHeight: number, imageHeight: number): MrzFormatInfo {
   if (lineCount >= 3) {
-    return { format: "TD1", confidence: 0.85, lineCount };
+    return { format: "TD1", confidence: MRZ_CONFIDENCE_TD1, lineCount };
   }
 
   if (lineCount === 2) {
     const aspectRatio = bandHeight / imageHeight;
     return {
-      format: aspectRatio > 0.1 ? "TD2" : "TD3",
-      confidence: 0.8,
+      format: aspectRatio > MRZ_ASPECT_RATIO_THRESHOLD ? "TD2" : "TD3",
+      confidence: MRZ_CONFIDENCE_TD2_TD3,
       lineCount: 2,
     };
   }
 
-  return { format: "UNKNOWN", confidence: 0.3, lineCount };
+  return { format: "UNKNOWN", confidence: MRZ_CONFIDENCE_UNKNOWN, lineCount };
 }
 
 function createMrzRegion(
@@ -437,7 +450,7 @@ class HeuristicMrzDetectionService implements MrzDetectionService {
   }
 
   private async saveCroppedImage(canvas: HTMLCanvasElement): Promise<string> {
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", 0.92));
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", JPEG_SAVE_QUALITY));
     if (!blob) {
       throw Object.assign(new Error("MRZ_DETECTION_FAILED"), {
         type: "MRZ_DETECTION_FAILED" as MrzDetectionError,
@@ -456,14 +469,14 @@ class MockMrzDetectionService implements MrzDetectionService {
     const isTd1 = image.height > 700;
     const lineCount = isTd1 ? 3 : 2;
     const bandHeight = isTd1 ? Math.round(image.height * 0.18) : Math.round(image.height * 0.08);
-    const y = image.height - bandHeight - 20;
+    const y = image.height - bandHeight - MOCK_MRZ_VERTICAL_OFFSET;
 
     const formatInfo = detectMrzFormat(lineCount, bandHeight, image.height);
 
-    return createMrzRegion(image.imagePath, 400, bandHeight, y, formatInfo);
+    return createMrzRegion(image.imagePath, MOCK_MRZ_FIXED_WIDTH, bandHeight, y, formatInfo);
   }
 
   private async simulateProcessing(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, MOCK_MRZ_DELAY_MS));
   }
 }

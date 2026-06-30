@@ -1,4 +1,5 @@
 import { getAllSessions, getAllGuestRows } from "./fill/fillStore";
+import { APP_VERSION } from "../config/constants";
 
 export type DiagnosticReport = {
   appVersion: string;
@@ -14,7 +15,7 @@ export async function generateDiagnosticReport(): Promise<DiagnosticReport> {
   const sessions = await getAllSessions();
   const guests = await getAllGuestRows();
   return {
-    appVersion: "0.1.0",
+    appVersion: APP_VERSION,
     osInfo: navigator.userAgent,
     dbStatus: "connected",
     sessionCount: sessions.length,

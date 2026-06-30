@@ -4,13 +4,15 @@ export function getFileExtension(fileName: string): string {
   return fileName.slice(dotIndex).toLowerCase();
 }
 
+import { IMAGE_EXTENSIONS, PDF_EXTENSION } from "../config/constants";
+
 export function isImageFile(fileName: string): boolean {
   const ext = getFileExtension(fileName);
-  return [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp"].includes(ext);
+  return (IMAGE_EXTENSIONS as readonly string[]).includes(ext);
 }
 
 export function isPdfFile(fileName: string): boolean {
-  return getFileExtension(fileName) === ".pdf";
+  return getFileExtension(fileName) === PDF_EXTENSION;
 }
 
 export function isSupportedFile(fileName: string): boolean {

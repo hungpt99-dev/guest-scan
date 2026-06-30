@@ -1,6 +1,7 @@
 import type { NormalizedFields } from "./field_normalization_service";
 import type { FieldConfidenceScores } from "./ocr_confidence_service";
 import { logger } from "../lib/logger";
+import { STAFF_REVIEW_MASK_OFFSET } from "../config/constants";
 
 export type EditableFields = {
   fullName: string;
@@ -127,7 +128,7 @@ class DefaultStaffReviewService implements StaffReviewService {
       return pending;
     }
 
-    const maskedValue = fieldName.toLowerCase().includes("number") ? value.slice(0, 3) + "***" : value;
+    const maskedValue = fieldName.toLowerCase().includes("number") ? value.slice(0, STAFF_REVIEW_MASK_OFFSET) + "***" : value;
 
     logger.info("StaffReviewService: staff edited field", {
       field: fieldName,

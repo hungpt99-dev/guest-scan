@@ -1,6 +1,7 @@
 import { getById, put } from "../../lib/db";
+import { FILL_SETTINGS_KEY, DEFAULT_CLEAR_CLIPBOARD_AFTER_SECONDS, DEFAULT_LOCAL_BRIDGE_PORT, DEFAULT_TARGET_SYSTEM_ID, DEFAULT_DATE_DISPLAY_FORMAT } from "../../config/constants";
 
-const SETTINGS_KEY = "fill_settings";
+const SETTINGS_KEY = FILL_SETTINGS_KEY;
 
 export type FillSettings = {
   defaultExcelFolder: string;
@@ -17,15 +18,15 @@ export type FillSettings = {
 
 export const DEFAULT_FILL_SETTINGS: FillSettings = {
   defaultExcelFolder: "",
-  defaultTargetSystemId: "copy_assistant",
-  dateDisplayFormat: "yyyy-MM-dd",
+  defaultTargetSystemId: DEFAULT_TARGET_SYSTEM_ID,
+  dateDisplayFormat: DEFAULT_DATE_DISPLAY_FORMAT,
   autoOpenNextGuestAfterFilled: true,
   maskDocumentNumberInLogs: true,
-  clearClipboardAfterSeconds: 60,
+  clearClipboardAfterSeconds: DEFAULT_CLEAR_CLIPBOARD_AFTER_SECONDS,
   enableGlobalShortcuts: false,
   enableBrowserExtension: true,
   enableDesktopAutomation: true,
-  localBridgePort: 43175,
+  localBridgePort: DEFAULT_LOCAL_BRIDGE_PORT,
 };
 
 let settings: FillSettings = { ...DEFAULT_FILL_SETTINGS };

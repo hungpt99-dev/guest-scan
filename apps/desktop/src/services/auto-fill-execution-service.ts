@@ -3,6 +3,7 @@ import type { AutoFillProfile, FieldMappingEntry } from "./auto-fill-mapping-ser
 export type { AutoFillProfile, FieldMappingEntry };
 import type { SafetyRule, TargetSystemType } from "@guestfill/shared";
 import { logger } from "../lib/logger";
+import { DEFAULT_FIELD_DELAY_MS } from "../config/constants";
 import { isTauri } from "../lib/isTauri";
 
 export type FillFieldStatus = "FILLED" | "SKIPPED" | "FAILED";
@@ -119,7 +120,7 @@ function maskSensitiveValue(value: string, formField: string): string {
   return value.slice(0, 2) + "***" + value.slice(-1);
 }
 
-const DEFAULT_FIELD_DELAY_MS = 100;
+
 
 export function createAutoFillExecutionService(executor?: FillExecutor): AutoFillExecutionService {
   return new DefaultAutoFillExecutionService(executor ?? createDefaultFillExecutor());

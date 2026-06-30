@@ -2,6 +2,18 @@ import type { OcrTextResult } from "../ocr/ocr_engine";
 import type { NormalizedFields } from "./field_normalization_service";
 import type { ConfidenceLevel } from "@guestfill/shared";
 import { logger } from "../lib/logger";
+import {
+  HIGH_CONFIDENCE_THRESHOLD,
+  MEDIUM_CONFIDENCE_THRESHOLD,
+  CHECK_DIGIT_BONUS,
+  CHECK_DIGIT_PENALTY,
+  EMPTY_FIELD_PENALTY,
+  INVALID_DATE_PENALTY,
+  GENDER_BONUS,
+  DOC_TYPE_BONUS,
+  INVALID_COUNTRY_PENALTY,
+  LOW_OCR_PENALTY,
+} from "../config/constants";
 
 export type FieldConfidenceScore = {
   score: number;
@@ -35,16 +47,8 @@ export interface OcrConfidenceService {
   ): FieldConfidenceScores;
 }
 
-const HIGH_THRESHOLD = 0.85;
-const MEDIUM_THRESHOLD = 0.6;
-const CHECK_DIGIT_BONUS = 0.1;
-const CHECK_DIGIT_PENALTY = 0.2;
-const EMPTY_FIELD_PENALTY = 0.2;
-const INVALID_DATE_PENALTY = 0.15;
-const GENDER_BONUS = 0.05;
-const DOC_TYPE_BONUS = 0.05;
-const INVALID_COUNTRY_PENALTY = 0.25;
-const LOW_OCR_PENALTY = 0.15;
+const HIGH_THRESHOLD = HIGH_CONFIDENCE_THRESHOLD;
+const MEDIUM_THRESHOLD = MEDIUM_CONFIDENCE_THRESHOLD;
 
 const ISO3_COUNTRIES = new Set<string>([
   "ABW",

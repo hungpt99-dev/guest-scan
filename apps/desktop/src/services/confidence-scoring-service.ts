@@ -4,6 +4,7 @@ import type { ImageQualityResult, ImageQualityWarning } from "./image_quality_se
 import type { ConfidenceLevel } from "@guestfill/shared";
 import { createOcrConfidenceService, type OcrConfidenceService } from "./ocr_confidence_service";
 import { logger } from "../lib/logger";
+import { HIGH_CONFIDENCE_THRESHOLD, MEDIUM_CONFIDENCE_THRESHOLD, QUALITY_PENALTY_CAP } from "../config/constants";
 
 import type { FieldConfidenceScores } from "./ocr_confidence_service";
 export type { FieldConfidenceScore, FieldConfidenceScores } from "./ocr_confidence_service";
@@ -19,8 +20,8 @@ export interface ConfidenceScoringService {
   identifyLowConfidenceFields(scores: FieldConfidenceScores): string[];
 }
 
-const HIGH_THRESHOLD = 0.85;
-const MEDIUM_THRESHOLD = 0.6;
+const HIGH_THRESHOLD = HIGH_CONFIDENCE_THRESHOLD;
+const MEDIUM_THRESHOLD = MEDIUM_CONFIDENCE_THRESHOLD;
 
 const QUALITY_PENALTIES: Record<ImageQualityWarning, number> = {
   BLURRY: 0.15,
@@ -32,8 +33,6 @@ const QUALITY_PENALTIES: Record<ImageQualityWarning, number> = {
   LOW_RESOLUTION: 0.12,
   EDGES_NOT_VISIBLE: 0.1,
 };
-
-const QUALITY_PENALTY_CAP = 0.3;
 
 const QUALITY_FIELD_IMPACT: Partial<Record<keyof FieldConfidenceScores, ImageQualityWarning[]>> = {
   fullName: ["BLURRY", "SKEWED"],

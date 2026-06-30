@@ -1,5 +1,13 @@
 import { logger } from "../lib/logger";
 import { getById, put } from "../lib/db";
+import {
+  SETTINGS_KEY,
+  OCR_CONFIDENCE_THRESHOLD,
+  DEFAULT_CAMERA_WIDTH,
+  DEFAULT_CAMERA_HEIGHT,
+  DEFAULT_RETENTION_MAX_AGE_DAYS,
+  DEFAULT_RETENTION_MAX_IMAGES,
+} from "../config/constants";
 
 export type OcrEngineType = "paddle" | "tesseract" | "mock";
 
@@ -72,8 +80,6 @@ export type SettingsValidationError = {
 
 export type SettingsChangeListener = (event: SettingsChangeEvent) => void;
 
-const SETTINGS_KEY = "app_settings";
-
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   ocr: {
     engineType: "paddle",
@@ -82,18 +88,18 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     tesseractPath: "",
     tesseractLanguage: "eng",
     enableFallback: true,
-    ocrConfidenceThreshold: 0.6,
+    ocrConfidenceThreshold: OCR_CONFIDENCE_THRESHOLD,
     enableGpu: false,
   },
   camera: {
     deviceId: "",
     label: "",
-    resolution: { width: 1280, height: 720 },
+    resolution: { width: DEFAULT_CAMERA_WIDTH, height: DEFAULT_CAMERA_HEIGHT },
   },
   imageRetention: {
     enabled: false,
-    maxAgeDays: 7,
-    maxImages: 100,
+    maxAgeDays: DEFAULT_RETENTION_MAX_AGE_DAYS,
+    maxImages: DEFAULT_RETENTION_MAX_IMAGES,
     storagePath: "",
   },
   autoFill: {

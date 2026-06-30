@@ -2,6 +2,16 @@ import { logger } from "../lib/logger";
 import { getAll, getById, put, remove, clearStore } from "../lib/db";
 import { maskPassportNumber, maskIdNumber, maskFullName } from "@guestfill/shared";
 import type { ConfirmedFields } from "./staff_review_service";
+import {
+  STORE_NAMES,
+  DEFAULT_AUDIT_RETENTION_DAYS,
+  DEFAULT_AUDIT_MAX_ENTRIES,
+  DEFAULT_AUDIT_QUERY_LIMIT,
+  MASK_MRZ_SHOW_CHARS,
+  MASK_MRZ_SUFFIX,
+  MASK_SHORT_VALUE_LENGTH,
+  MASK_SHOW_CHARS,
+} from "../config/constants";
 
 // ── Event types ────────────────────────────────────────────────
 
@@ -46,10 +56,10 @@ export type AuditLogRetentionConfig = {
   maxEntries: number;
 };
 
-const STORE_NAME = "audit_logs";
+const STORE_NAME = STORE_NAMES.AUDIT_LOGS;
 const DEFAULT_RETENTION: AuditLogRetentionConfig = {
-  maxAgeDays: 90,
-  maxEntries: 10_000,
+  maxAgeDays: DEFAULT_AUDIT_RETENTION_DAYS,
+  maxEntries: DEFAULT_AUDIT_MAX_ENTRIES,
 };
 
 // ── Sensitive-field patterns matched against detail keys ───────
@@ -89,10 +99,10 @@ function maskByKey(key: string, value: unknown): unknown {
   ) {
     return maskFullName(value);
   }
-  if (/mrz/i.test(key)) return value.length > 10 ? value.slice(0, 8) + "***" : "***";
+  if (/mrz/i.test(key)) return value.length > 10 ? value.slice(0, MASK_MRZ_SHOW_CHARS) + MASK_MRZ_SUFFIX : MASK_MRZ_SUFFIX;
   if (/image/i.test(key)) return "[REDACTED]";
-  if (value.length <= 4) return value;
-  return value.slice(0, 2) + "***" + value.slice(-1);
+  if (value.length <= MASK_SHORT_VALUE_LENGTH) return value;
+  return value.slice(0, MASK_SHOW_CHARS) + MASK_MRZ_SUFFIX + value.slice(-1);
 }
 
 function maskDetails(details: Record<string, unknown>): Record<string, unknown> {
@@ -410,7 +420,7 @@ class DefaultAuditLogService implements AuditLogService {
     const sorted = filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     const offset = filter?.offset ?? 0;
-    const limit = filter?.limit ?? 50;
+    const limit = filter?.limit ?? DEFAULT_AUDIT_QUERY_LIMIT;
 
     return {
       total: sorted.length,

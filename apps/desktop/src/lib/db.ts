@@ -1,38 +1,37 @@
-const DB_NAME = "guestfill";
-const DB_VERSION = 2;
+import { DB_NAME, DB_VERSION, STORE_NAMES } from "../config/constants";
 
 export function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      if (!db.objectStoreNames.contains("import_sessions")) {
-        db.createObjectStore("import_sessions", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORE_NAMES.IMPORT_SESSIONS)) {
+        db.createObjectStore(STORE_NAMES.IMPORT_SESSIONS, { keyPath: "id" });
       }
-      if (!db.objectStoreNames.contains("guest_rows")) {
-        const store = db.createObjectStore("guest_rows", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORE_NAMES.GUEST_ROWS)) {
+        const store = db.createObjectStore(STORE_NAMES.GUEST_ROWS, { keyPath: "id" });
         store.createIndex("session_id", "sessionId", { unique: false });
         store.createIndex("status", "status", { unique: false });
         store.createIndex("fill_status", "fillStatus", { unique: false });
         store.createIndex("full_name", "fullName", { unique: false });
       }
-      if (!db.objectStoreNames.contains("target_templates")) {
-        db.createObjectStore("target_templates", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORE_NAMES.TARGET_TEMPLATES)) {
+        db.createObjectStore(STORE_NAMES.TARGET_TEMPLATES, { keyPath: "id" });
       }
-      if (!db.objectStoreNames.contains("fill_events")) {
-        const store = db.createObjectStore("fill_events", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORE_NAMES.FILL_EVENTS)) {
+        const store = db.createObjectStore(STORE_NAMES.FILL_EVENTS, { keyPath: "id" });
         store.createIndex("session_id", "sessionId", { unique: false });
         store.createIndex("event_type", "eventType", { unique: false });
         store.createIndex("created_at", "createdAt", { unique: false });
       }
-      if (!db.objectStoreNames.contains("settings")) {
-        db.createObjectStore("settings", { keyPath: "key" });
+      if (!db.objectStoreNames.contains(STORE_NAMES.SETTINGS)) {
+        db.createObjectStore(STORE_NAMES.SETTINGS, { keyPath: "key" });
       }
-      if (!db.objectStoreNames.contains("auto_fill_profiles")) {
-        db.createObjectStore("auto_fill_profiles", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORE_NAMES.AUTO_FILL_PROFILES)) {
+        db.createObjectStore(STORE_NAMES.AUTO_FILL_PROFILES, { keyPath: "id" });
       }
-      if (!db.objectStoreNames.contains("audit_logs")) {
-        const store = db.createObjectStore("audit_logs", { keyPath: "id" });
+      if (!db.objectStoreNames.contains(STORE_NAMES.AUDIT_LOGS)) {
+        const store = db.createObjectStore(STORE_NAMES.AUDIT_LOGS, { keyPath: "id" });
         store.createIndex("event_type", "eventType", { unique: false });
         store.createIndex("timestamp", "timestamp", { unique: false });
         store.createIndex("session_id", "sessionId", { unique: false });

@@ -43,7 +43,8 @@ class Err(Generic[T]):
     def unwrap_err(self) -> T:
         return self._error
 
-    def unwrap_or(self, default): ...
+    def unwrap_or(self, default):
+        return default
 
 
 Result = Ok | Err

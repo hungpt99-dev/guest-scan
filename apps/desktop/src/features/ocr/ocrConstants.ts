@@ -13,6 +13,6 @@ export const OCR_LANGUAGES = [
   { code: "kor", label: "Korean" },
 ] as const;
 
-export const SUPPORTED_FILE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".tiff", ".tif", ".bmp", ".pdf"] as const;
+import { SUPPORTED_FILE_EXTENSIONS, OCR_TIMEOUT_MS } from "../../config/constants";
 
-export const OCR_TIMEOUT_MS = 300_000;
+export { SUPPORTED_FILE_EXTENSIONS, OCR_TIMEOUT_MS };
