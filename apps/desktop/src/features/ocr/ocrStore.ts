@@ -20,3 +20,7 @@ export function updateJob(jobId: string, updates: Partial<OcrJob>): void {
     jobs.set(jobId, { ...existing, ...updates });
   }
 }
+
+export function clearJobs(): void {
+  jobs.clear();
+}

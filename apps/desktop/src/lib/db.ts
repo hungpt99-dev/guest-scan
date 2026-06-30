@@ -1,5 +1,5 @@
 const DB_NAME = "guestfill";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -27,6 +27,15 @@ export function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains("settings")) {
         db.createObjectStore("settings", { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains("auto_fill_profiles")) {
+        db.createObjectStore("auto_fill_profiles", { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains("audit_logs")) {
+        const store = db.createObjectStore("audit_logs", { keyPath: "id" });
+        store.createIndex("event_type", "eventType", { unique: false });
+        store.createIndex("timestamp", "timestamp", { unique: false });
+        store.createIndex("session_id", "sessionId", { unique: false });
       }
     };
     request.onsuccess = (event) => resolve((event.target as IDBOpenDBRequest).result);

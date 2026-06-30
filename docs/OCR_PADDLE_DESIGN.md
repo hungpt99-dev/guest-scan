@@ -1,8 +1,9 @@
 # PaddleOCR Integration Design
 
-> **Status:** Draft — design for review before implementation
+> **Status:** Implemented
+> **Related:** [OCR Technical Design](OCR_TECHNICAL_DESIGN.md)
 
-This document describes how PaddleOCR is integrated as the primary OCR engine with Tesseract as fallback, replacing the existing Tesseract-only MRZ pipeline. The goal is to improve MRZ extraction accuracy, add global language support, and keep all processing fully local.
+This document describes the PaddleOCR integration design — now fully implemented as the primary OCR engine with Tesseract as fallback. The original design is preserved as an implementation reference. Key implemented components: `paddleocr_engine.py`, `engine_selector.py`, multi-language support (17 languages), adaptive preprocessing (5 paths), script detection, transliteration.
 
 ## System Architecture
 

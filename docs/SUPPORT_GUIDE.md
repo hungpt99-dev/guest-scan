@@ -14,9 +14,10 @@ Before contacting support:
 - [ ] Have you checked the error message?
 - [ ] Have you exported a diagnostic report?
 - [ ] What version of GuestFill are you using?
-- [ ] What Windows version?
+- [ ] What OS and version? (Windows 10/11, macOS, Linux)
 - [ ] What type of documents are you processing?
 - [ ] What hotel system are you filling?
+- [ ] Are you using the installed version or running from source?
 
 ## Providing Diagnostic Reports
 

@@ -95,6 +95,32 @@ def estimate_wear(gray: np.ndarray) -> float:
     return min(1.0, std_of_stds / 50.0)
 
 
+def estimate_edge_visibility(gray: np.ndarray) -> float:
+    try:
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 50, 150)
+        h, w = gray.shape[:2]
+        total_pixels = h * w
+        edge_pixels = float(np.count_nonzero(edges))
+        if edge_pixels < max(total_pixels * 0.001, 100):
+            return 0.0
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not contours:
+            return edge_pixels / total_pixels * 0.5
+        largest = max(contours, key=cv2.contourArea)
+        peri = cv2.arcLength(largest, True)
+        approx = cv2.approxPolyDP(largest, 0.02 * peri, True)
+        area = float(cv2.contourArea(largest))
+        image_area = float(h * w)
+        area_ratio = area / image_area
+        if len(approx) == 4:
+            return min(1.0, area_ratio * 2.0)
+        is_rectangular = min(1.0, len(approx) / 4.0)
+        return min(1.0, (edge_pixels / total_pixels) * 10.0 * is_rectangular)
+    except Exception:
+        return 0.0
+
+
 def select_preprocessing_path(quality: dict) -> str:
     if quality.get("glare_ratio", 0) > 0.15:
         return PATH_GLARE
@@ -118,6 +144,7 @@ def analyze_quality(gray: np.ndarray) -> dict:
     glare = estimate_glare(gray)
     crease = estimate_crease(gray)
     wear = estimate_wear(gray)
+    edge_visibility = estimate_edge_visibility(gray)
 
     warnings: list[str] = []
     if blur < 50:
@@ -138,6 +165,8 @@ def analyze_quality(gray: np.ndarray) -> dict:
         warnings.append("CREASE_DETECTED")
     if wear > 0.4:
         warnings.append("WEAR_DETECTED")
+    if edge_visibility < 0.3:
+        warnings.append("EDGES_NOT_VISIBLE")
 
     recommended_path = select_preprocessing_path(
         {
@@ -157,6 +186,7 @@ def analyze_quality(gray: np.ndarray) -> dict:
         "contrast": round(contrast, 2),
         "skew_angle": round(skew, 2),
         "glare_ratio": round(glare, 4),
+        "edge_visibility": round(edge_visibility, 4),
         "crease_score": round(crease, 4),
         "wear_score": round(wear, 4),
         "warnings": warnings,

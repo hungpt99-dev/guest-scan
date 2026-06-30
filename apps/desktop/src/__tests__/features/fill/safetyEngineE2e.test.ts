@@ -302,7 +302,7 @@ describe("Safety Engine + Transform E2E: full pipeline", () => {
     it("full accuracy pipeline: confidence + field accuracy + guest validation", () => {
       const goodGuest = makeGuest({
         fullName: "Valid Name",
-        passportNumber: "XY999999",
+        passportNumber: "123456789",
         dateOfBirth: "1990-06-15",
         gender: "M",
         nationality: "US",

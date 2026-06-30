@@ -18,7 +18,7 @@
 
 ### ESLint Rules
 
-- Based on `@typescript-eslint/recommended`
+- Based on `eslint.configs.recommended` + `tseslint.configs.recommended` + `eslint-config-prettier`
 - `no-explicit-any` is a warning, not an error
 - Unused variables (except those prefixed with `_`) are warnings
 - Consistent type imports are enforced
@@ -41,7 +41,7 @@
 
 ### Ruff Rules
 
-- Line length: 100
+- Line length: 120
 - Target: Python 3.11
 - Selected rules: E (pycodestyle), F (pyflakes), I (isort), B (flake8-bugbear), UP (pyupgrade), SIM (simplify)
 
@@ -71,22 +71,25 @@
 
 ### Test Organization
 
-**TypeScript (Vitest):** `apps/desktop/src/__tests__/`
+**TypeScript (Vitest):** `apps/desktop/src/__tests__/` (43 test files)
 
 - `lib/` — Unit tests for shared utilities (date, file, masking, result)
+- `services/` — 15+ test files for OCR pipeline services (MRZ detection, parsing, validation, confidence scoring, field normalization)
+- `unit/` — Unit tests for OCR, auto-fill mapping, image quality
+- `integration/` — Integration tests for OCR engine, settings, auto-fill
 - `features/` — Feature-specific tests organized by module
   - `features/excel/` — Excel validation, import integration
-  - `features/fill/` — Fill workflow, safety engine, transform, store, template
+  - `features/fill/` — Fill workflow, safety engine (73 tests), transform, store, template
   - `features/settings/` — Settings persistence E2E
   - `features/ocr/` — OCR job lifecycle
   - `features/diagnostics/` — Diagnostics report generation
   - `features/extension/` — Browser extension message handling
-  - `features/cross-feature/` — Full end-to-end pipeline tests
+  - `features/cross-feature/` — Full end-to-end pipeline tests (30 tests)
 
-**Python (pytest):** `workers/ocr/tests/`
+**Python (pytest):** `workers/ocr/tests/` (28 test files)
 
-- `unit/` — Unit tests for individual modules
-- `e2e/` — E2E integration tests for full MRZ pipeline and Excel export
+- `unit/` — Unit tests for individual modules (MRZ parsing/validation, PaddleOCR engine, script detection, transliteration, confidence scoring, field normalization)
+- `e2e/` — E2E integration tests for full MRZ pipeline and Excel export with all sheets
 
 ## Commit Message Rules
 

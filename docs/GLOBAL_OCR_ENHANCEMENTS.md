@@ -1,7 +1,18 @@
 # Global OCR Support Enhancements
 
-> **Status: Design Proposal**
+> **Status: Partially Implemented**
 > **Related:** [OCR Technical Design](OCR_TECHNICAL_DESIGN.md)
+
+> The following features from this design proposal are **already implemented**:
+>
+> - Expanded country-language mapping (60+ countries)
+> - Script detection module (`script_detector.py`)
+> - Adaptive preprocessing (5 paths in `preprocess.py`)
+> - Transliteration module (`transliteration.py`)
+> - Enhanced MRZ handling (TD1/TD2/TD3, candidate expansion, repair)
+> - Visual zone OCR enhancement (partial, `passport_visual_ocr.py`)
+>
+> **Remaining (not yet implemented):** EasyOCR integration, field localization template registry, comprehensive test dataset.
 
 ## 1. Goals
 

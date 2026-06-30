@@ -1,7 +1,19 @@
 # Auto-Fill Accuracy & Usability Enhancements
 
-> **Status: Design Proposal**
+> **Status: Partially Implemented**
 > **Related:** [Auto-Fill Technical Design](AUTO_FILL_TECHNICAL_DESIGN.md)
+
+> The following features from this design proposal are **already implemented**:
+>
+> - Per-field accuracy scoring with HIGH/MEDIUM/LOW levels (`safetyEngine.ts`)
+> - Actionable recommendations (~175 lines of quick-fix suggestions)
+> - Country-specific passport patterns (46 countries)
+> - Cross-field validation (6 checks)
+> - Fuzzy name matching (4 levels)
+> - `strip` and `phone_format` transform rules
+> - Visual confidence indicators in Fill UI
+>
+> **Remaining (not yet implemented):** Address field support, correction learning system, customizable keyboard shortcuts, batch fill mode.
 
 ## 1. Goals
 

@@ -2,7 +2,7 @@ export type GuestStatus = "READY" | "NEED_REVIEW" | "FAILED" | "MISSING_DATA" | 
 
 export type DocumentType = "PASSPORT" | "ID_CARD" | "UNKNOWN";
 
-export type Gender = "M" | "F" | "UNKNOWN";
+export type Gender = "M" | "F" | "X" | "UNKNOWN";
 
 export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
 

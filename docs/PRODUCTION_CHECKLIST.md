@@ -4,9 +4,14 @@
 
 - [ ] Desktop app production build works (`pnpm build:desktop`)
 - [ ] OCR worker packaged (`python scripts/build-ocr-worker.py`)
+- [ ] PaddleOCR models bundled with OCR worker
 - [ ] Tesseract bundled with OCR worker
 - [ ] Tessdata bundled with OCR worker
 - [ ] Default config files bundled
+- [ ] Windows `.exe` installer builds (`pnpm build:desktop -- --bundler msi`)
+- [ ] macOS `.dmg` builds (`pnpm build:desktop -- --bundler dmg`)
+- [ ] Linux `.AppImage` builds (`pnpm build:desktop -- --bundler appimage`)
+- [ ] Tauri updater configured and signature generated
 
 ## OCR Verification
 
@@ -61,14 +66,19 @@
 - [ ] .env file is in .gitignore
 - [ ] .env.example is committed
 - [ ] Test data does not contain real passport/ID info
+- [ ] Code signing certificate applied (Windows: Authenticode, macOS: Developer ID)
+- [ ] macOS notarization completed
 
 ## Installation Verification
 
 - [ ] Clean Windows 10 install tested
 - [ ] Clean Windows 11 install tested
-- [ ] Non-admin user account tested
+- [ ] Non-admin user account tested (Windows)
 - [ ] Path with spaces tested
 - [ ] Path with Vietnamese characters tested
+- [ ] macOS clean install tested (Intel + Apple Silicon)
+- [ ] Linux clean install tested (Ubuntu + Fedora)
+- [ ] PaddleOCR models download on first run (or bundled)
 
 ## Documentation Verification
 

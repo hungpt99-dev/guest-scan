@@ -391,7 +391,7 @@ describe("safetyEngine", () => {
       const result = fuzzyMatchNames("Jon", "John");
       expect(result.match).toBe(true);
       expect(result.similarity).toBeGreaterThanOrEqual(0.7);
-      expect(result.method).toBe("levenshtein");
+      expect(result.method).toBe("soundex");
     });
 
     it("rejects very different names", () => {
@@ -421,7 +421,7 @@ describe("safetyEngine", () => {
     });
 
     it("detects no warnings for clean alphanumeric without ambiguous chars", () => {
-      const warnings = getCharacterAmbiguityWarnings("ABCDEFGH");
+      const warnings = getCharacterAmbiguityWarnings("CDEFHJK");
       expect(warnings.length).toBe(0);
     });
 

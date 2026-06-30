@@ -18,14 +18,38 @@ pnpm dev:ocr         # Test OCR worker CLI
 ## Workspace Structure
 
 ```
-guestfill/
-  apps/desktop/          Tauri desktop application
-  workers/ocr/           Python OCR worker
-  workers/desktop_agent/ Python desktop automation agent (placeholder)
-  apps/browser-extension/ Chrome extension (placeholder)
-  packages/shared/       Shared TypeScript types and utilities
-  docs/                  Project documentation
-  scripts/               Development automation scripts
+guest-scan/
+  apps/
+    desktop/                Tauri desktop application
+      src/
+        api/                OCR API bridge layer
+        components/         Shared layout and common components
+        features/           Feature modules (fill, excel, ocr, settings, diagnostics)
+        lib/                Core utilities (Result type, file utils, date utils, DB, logging)
+        ocr/                OCR engine wrappers (PaddleOCR, Tesseract, mock)
+        screens/            Top-level screens (Home, OCR, ImportExcel, FillAssistant, etc.)
+        services/           15 OCR pipeline services (detection, parsing, validation, scoring)
+        ui/                 UI-focused screens (camera capture, review, correction, confirmation)
+        styles/             Global CSS
+      src-tauri/
+        src/
+          commands/         Rust command modules (file, clipboard, Excel, OCR, settings)
+          app_state.rs      Tauri application state
+          error.rs          Rust error types
+          main.rs           Tauri entry point
+    browser-extension/      Chrome/Edge extension (Manifest V3)
+  workers/
+    ocr/                    Python OCR worker
+      guestfill_ocr/        Python packages (cli, config, image, ocr, extraction, pipeline, etc.)
+      tests/                Unit + E2E test suites
+    desktop_agent/          Python desktop automation agent (scaffolding)
+  packages/
+    shared/                 Shared TypeScript types, constants, utilities
+  docs/                     Project documentation
+  scripts/                  Development automation scripts
+  tests/
+    e2e/                    Cross-app E2E integration tests
+  artifacts/                Analysis reports
 ```
 
 ## Quality Commands
@@ -140,12 +164,20 @@ To enable CodeGraph, install it from: https://codegraph.dev
 
 ## Folder Conventions
 
-| Folder                         | Contents                              |
-| ------------------------------ | ------------------------------------- |
-| `apps/desktop/src/screens/`    | Page-level components (one per route) |
-| `apps/desktop/src/components/` | Reusable UI components                |
-| `apps/desktop/src/features/`   | Feature-specific logic, types, stores |
-| `workers/ocr/guestfill_ocr/`   | Python OCR worker packages            |
-| `packages/shared/src/`         | Shared TypeScript types and utilities |
-| `docs/`                        | Project documentation                 |
-| `scripts/`                     | Development automation scripts        |
+| Folder                         | Contents                                     |
+| ------------------------------ | -------------------------------------------- |
+| `apps/desktop/src/screens/`    | Page-level components (one per route)        |
+| `apps/desktop/src/components/` | Reusable UI components                       |
+| `apps/desktop/src/features/`   | Feature modules (fill, excel, ocr, settings) |
+| `apps/desktop/src/services/`   | 15 OCR pipeline service modules              |
+| `apps/desktop/src/ocr/`        | OCR engine wrappers (PaddleOCR, Tesseract)   |
+| `apps/desktop/src/api/`        | OCR API bridge layer                         |
+| `apps/desktop/src/ui/`         | UI screens (CameraCapture, Review, etc.)     |
+| `apps/desktop/src/lib/`        | Core utilities (Result, DB, logging, dates)  |
+| `apps/desktop/src/styles/`     | Global CSS                                   |
+| `apps/desktop/src-tauri/src/`  | Rust command handlers + state                |
+| `workers/ocr/guestfill_ocr/`   | Python OCR worker packages                   |
+| `packages/shared/src/`         | Shared TypeScript types and utilities        |
+| `docs/`                        | Project documentation                        |
+| `scripts/`                     | Development automation scripts               |
+| `artifacts/`                   | Analysis reports (not versioned)             |

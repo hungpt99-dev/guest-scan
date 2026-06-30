@@ -1,12 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { addJob, getJob, getAllJobs, updateJob } from "../../../features/ocr/ocrStore";
+import { addJob, getJob, getAllJobs, updateJob, clearJobs } from "../../../features/ocr/ocrStore";
 import type { OcrJob } from "../../../features/ocr/ocrTypes";
 
 describe("OCR Store E2E: job lifecycle", () => {
   beforeEach(() => {
-    while (getAllJobs().length > 0) {
-      updateJob(getAllJobs()[0]!.jobId, { status: "COMPLETED" });
-    }
+    clearJobs();
   });
 
   function createJob(overrides?: Partial<OcrJob>): OcrJob {

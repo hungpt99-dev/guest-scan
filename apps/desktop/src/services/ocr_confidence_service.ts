@@ -1,0 +1,486 @@
+import type { OcrTextResult } from "../ocr/ocr_engine";
+import type { NormalizedFields } from "./field_normalization_service";
+import type { ConfidenceLevel } from "@guestfill/shared";
+import { logger } from "../lib/logger";
+
+export type FieldConfidenceScore = {
+  score: number;
+  level: ConfidenceLevel;
+  issues: string[];
+};
+
+export type FieldConfidenceScores = {
+  fullName: FieldConfidenceScore;
+  firstName: FieldConfidenceScore;
+  lastName: FieldConfidenceScore;
+  gender: FieldConfidenceScore;
+  dateOfBirth: FieldConfidenceScore;
+  nationality: FieldConfidenceScore;
+  countryCode: FieldConfidenceScore;
+  documentType: FieldConfidenceScore;
+  documentNumber: FieldConfidenceScore;
+  passportNumber: FieldConfidenceScore;
+  idNumber: FieldConfidenceScore;
+  issueDate: FieldConfidenceScore;
+  expiryDate: FieldConfidenceScore;
+  issuingCountry: FieldConfidenceScore;
+  mrzRaw: FieldConfidenceScore;
+};
+
+export interface OcrConfidenceService {
+  calculateConfidence(
+    fields: NormalizedFields,
+    rawOcrResult: OcrTextResult,
+    checkDigits?: Record<string, boolean>,
+  ): FieldConfidenceScores;
+}
+
+const HIGH_THRESHOLD = 0.85;
+const MEDIUM_THRESHOLD = 0.6;
+const CHECK_DIGIT_BONUS = 0.1;
+const CHECK_DIGIT_PENALTY = 0.2;
+const EMPTY_FIELD_PENALTY = 0.2;
+const INVALID_DATE_PENALTY = 0.15;
+const GENDER_BONUS = 0.05;
+const DOC_TYPE_BONUS = 0.05;
+const INVALID_COUNTRY_PENALTY = 0.25;
+const LOW_OCR_PENALTY = 0.15;
+
+const ISO3_COUNTRIES = new Set<string>([
+  "ABW",
+  "AFG",
+  "AGO",
+  "AIA",
+  "ALA",
+  "ALB",
+  "AND",
+  "ARE",
+  "ARG",
+  "ARM",
+  "ASM",
+  "ATA",
+  "ATF",
+  "ATG",
+  "AUS",
+  "AUT",
+  "AZE",
+  "BDI",
+  "BEL",
+  "BEN",
+  "BES",
+  "BFA",
+  "BGD",
+  "BGR",
+  "BHR",
+  "BHS",
+  "BIH",
+  "BLM",
+  "BLR",
+  "BLZ",
+  "BMU",
+  "BOL",
+  "BRA",
+  "BRB",
+  "BRN",
+  "BTN",
+  "BVT",
+  "BWA",
+  "CAF",
+  "CAN",
+  "CCK",
+  "CHE",
+  "CHL",
+  "CHN",
+  "CIV",
+  "CMR",
+  "COD",
+  "COG",
+  "COK",
+  "COL",
+  "COM",
+  "CPV",
+  "CRI",
+  "CUB",
+  "CUW",
+  "CXR",
+  "CYM",
+  "CYP",
+  "CZE",
+  "DEU",
+  "DJI",
+  "DMA",
+  "DNK",
+  "DOM",
+  "DZA",
+  "ECU",
+  "EGY",
+  "ERI",
+  "ESH",
+  "ESP",
+  "EST",
+  "ETH",
+  "FIN",
+  "FJI",
+  "FLK",
+  "FRA",
+  "FRO",
+  "FSM",
+  "GAB",
+  "GBR",
+  "GEO",
+  "GGY",
+  "GHA",
+  "GIB",
+  "GIN",
+  "GLP",
+  "GMB",
+  "GNB",
+  "GNQ",
+  "GRC",
+  "GRD",
+  "GRL",
+  "GTM",
+  "GUF",
+  "GUM",
+  "GUY",
+  "HKG",
+  "HMD",
+  "HND",
+  "HRV",
+  "HTI",
+  "HUN",
+  "IDN",
+  "IMN",
+  "IND",
+  "IOT",
+  "IRL",
+  "IRN",
+  "IRQ",
+  "ISL",
+  "ISR",
+  "ITA",
+  "JAM",
+  "JEY",
+  "JOR",
+  "JPN",
+  "KAZ",
+  "KEN",
+  "KGZ",
+  "KHM",
+  "KIR",
+  "KNA",
+  "KOR",
+  "KWT",
+  "LAO",
+  "LBN",
+  "LBR",
+  "LBY",
+  "LCA",
+  "LIE",
+  "LKA",
+  "LSO",
+  "LTU",
+  "LUX",
+  "LVA",
+  "MAC",
+  "MAF",
+  "MAR",
+  "MCO",
+  "MDA",
+  "MDG",
+  "MDV",
+  "MEX",
+  "MHL",
+  "MKD",
+  "MLI",
+  "MLT",
+  "MMR",
+  "MNE",
+  "MNG",
+  "MNP",
+  "MOZ",
+  "MRT",
+  "MSR",
+  "MTQ",
+  "MUS",
+  "MWI",
+  "MYS",
+  "MYT",
+  "NAM",
+  "NCL",
+  "NER",
+  "NFK",
+  "NGA",
+  "NIC",
+  "NIU",
+  "NLD",
+  "NOR",
+  "NPL",
+  "NRU",
+  "NZL",
+  "OMN",
+  "PAK",
+  "PAN",
+  "PCN",
+  "PER",
+  "PHL",
+  "PLW",
+  "PNG",
+  "POL",
+  "PRI",
+  "PRK",
+  "PRT",
+  "PRY",
+  "PSE",
+  "PYF",
+  "QAT",
+  "REU",
+  "ROU",
+  "RUS",
+  "RWA",
+  "SAU",
+  "SDN",
+  "SEN",
+  "SGP",
+  "SGS",
+  "SHN",
+  "SJM",
+  "SLB",
+  "SLE",
+  "SLV",
+  "SMR",
+  "SOM",
+  "SPM",
+  "SRB",
+  "SSD",
+  "STP",
+  "SUR",
+  "SVK",
+  "SVN",
+  "SWE",
+  "SWZ",
+  "SXM",
+  "SYC",
+  "SYR",
+  "TCA",
+  "TCD",
+  "TGO",
+  "THA",
+  "TJK",
+  "TKL",
+  "TKM",
+  "TLS",
+  "TON",
+  "TTO",
+  "TUN",
+  "TUR",
+  "TUV",
+  "TWN",
+  "TZA",
+  "UGA",
+  "UKR",
+  "UMI",
+  "URY",
+  "USA",
+  "UZB",
+  "VAT",
+  "VCT",
+  "VEN",
+  "VGB",
+  "VIR",
+  "VNM",
+  "VUT",
+  "WLF",
+  "WSM",
+  "YEM",
+  "ZAF",
+  "ZMB",
+  "ZWE",
+]);
+
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function clampScore(score: number): number {
+  return Math.max(0, Math.min(1, score));
+}
+
+function scoreToLevel(score: number): ConfidenceLevel {
+  if (score >= HIGH_THRESHOLD) return "HIGH";
+  if (score >= MEDIUM_THRESHOLD) return "MEDIUM";
+  return "LOW";
+}
+
+function isValidDate(value: string): boolean {
+  if (!DATE_REGEX.test(value)) return false;
+  const date = new Date(value + "T00:00:00Z");
+  if (isNaN(date.getTime())) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  return date.getUTCFullYear() === y && date.getUTCMonth() + 1 === m && date.getUTCDate() === d;
+}
+
+function isValidIso3(value: string): boolean {
+  return value.length === 3 && ISO3_COUNTRIES.has(value);
+}
+
+function fieldScore(
+  baseScore: number,
+  value: string,
+  ocrAvg: number,
+  options?: {
+    checkDigitValid?: boolean;
+    validateDate?: boolean;
+    validateCountry?: boolean;
+    validateGender?: boolean;
+    validateDocType?: boolean;
+  },
+): { score: number; issues: string[] } {
+  const issues: string[] = [];
+  let adjusted = baseScore;
+
+  if (!value) {
+    issues.push("Field is empty");
+    adjusted -= EMPTY_FIELD_PENALTY;
+  }
+
+  if (options?.checkDigitValid === true) {
+    adjusted += CHECK_DIGIT_BONUS;
+  } else if (options?.checkDigitValid === false) {
+    issues.push("MRZ check digit validation failed");
+    adjusted -= CHECK_DIGIT_PENALTY;
+  }
+
+  if (options?.validateDate && value) {
+    if (!isValidDate(value)) {
+      issues.push("Invalid date format or value");
+      adjusted -= INVALID_DATE_PENALTY;
+    }
+  }
+
+  if (options?.validateCountry && value) {
+    if (!isValidIso3(value)) {
+      issues.push("Invalid country code");
+      adjusted -= INVALID_COUNTRY_PENALTY;
+    }
+  }
+
+  if (options?.validateGender && value) {
+    if (value === "M" || value === "F") {
+      adjusted += GENDER_BONUS;
+    } else if (value !== "UNKNOWN") {
+      issues.push("Unexpected gender value");
+    }
+  }
+
+  if (options?.validateDocType && value) {
+    if (value === "PASSPORT" || value === "ID_CARD") {
+      adjusted += DOC_TYPE_BONUS;
+    }
+  }
+
+  if (ocrAvg < 0.6) {
+    adjusted -= LOW_OCR_PENALTY;
+    issues.push("Low overall OCR confidence");
+  }
+
+  return { score: clampScore(adjusted), issues };
+}
+
+export function createOcrConfidenceService(): OcrConfidenceService {
+  return new DefaultOcrConfidenceService();
+}
+
+class DefaultOcrConfidenceService implements OcrConfidenceService {
+  calculateConfidence(
+    fields: NormalizedFields,
+    rawOcrResult: OcrTextResult,
+    checkDigits?: Record<string, boolean>,
+  ): FieldConfidenceScores {
+    const ocrAvg = rawOcrResult.averageConfidence;
+    const baseScore = 0.2 + ocrAvg * 0.8;
+    const base = clampScore(baseScore);
+
+    logger.debug("OcrConfidenceService: calculating confidence", {
+      ocrAverageConfidence: ocrAvg,
+      baseScore: base,
+    });
+
+    const fullNameScore = fieldScore(base, fields.fullName, ocrAvg);
+    const firstNameScore = fieldScore(base, fields.firstName, ocrAvg);
+    const lastNameScore = fieldScore(base, fields.lastName, ocrAvg);
+
+    const genderScore = fieldScore(base, fields.gender, ocrAvg, {
+      validateGender: true,
+    });
+
+    const dateOfBirthScore = fieldScore(base, fields.dateOfBirth, ocrAvg, {
+      validateDate: true,
+      checkDigitValid: checkDigits?.date_of_birth_valid,
+    });
+
+    const nationalityScore = fieldScore(base, fields.nationality, ocrAvg, {
+      validateCountry: true,
+    });
+
+    const countryCodeScore = fieldScore(base, fields.countryCode, ocrAvg, {
+      validateCountry: true,
+    });
+
+    const documentTypeScore = fieldScore(base, fields.documentType, ocrAvg, {
+      validateDocType: true,
+    });
+
+    const documentNumberScore = fieldScore(base, fields.documentNumber, ocrAvg, {
+      checkDigitValid: checkDigits?.document_number_valid ?? checkDigits?.passport_number_valid,
+    });
+
+    const passportNumberScore = fieldScore(base, fields.passportNumber, ocrAvg, {
+      checkDigitValid: checkDigits?.passport_number_valid,
+    });
+
+    const idNumberScore = fieldScore(base, fields.idNumber, ocrAvg);
+
+    const issueDateScore = fieldScore(base, fields.issueDate, ocrAvg, {
+      validateDate: true,
+      checkDigitValid: checkDigits?.optional_data_valid,
+    });
+
+    const expiryDateScore = fieldScore(base, fields.expiryDate, ocrAvg, {
+      validateDate: true,
+      checkDigitValid: checkDigits?.expiry_date_valid,
+    });
+
+    const issuingCountryScore = fieldScore(base, fields.issuingCountry, ocrAvg, {
+      validateCountry: true,
+    });
+
+    let mrzRawScoreValue: number;
+    let mrzRawIssues: string[];
+    if (rawOcrResult.lines.length > 0) {
+      const lineScores = rawOcrResult.lines.map((l) => l.confidence);
+      const avgLineConfidence = lineScores.reduce((a, b) => a + b, 0) / lineScores.length;
+      mrzRawScoreValue = clampScore(avgLineConfidence * 0.8 + base * 0.2);
+      mrzRawIssues = avgLineConfidence < 0.6 ? ["Low MRZ line confidence"] : [];
+    } else {
+      mrzRawScoreValue = base;
+      mrzRawIssues = fields.mrzRaw ? [] : ["MRZ raw text is empty"];
+    }
+
+    return {
+      fullName: { ...fullNameScore, level: scoreToLevel(fullNameScore.score) },
+      firstName: { ...firstNameScore, level: scoreToLevel(firstNameScore.score) },
+      lastName: { ...lastNameScore, level: scoreToLevel(lastNameScore.score) },
+      gender: { ...genderScore, level: scoreToLevel(genderScore.score) },
+      dateOfBirth: { ...dateOfBirthScore, level: scoreToLevel(dateOfBirthScore.score) },
+      nationality: { ...nationalityScore, level: scoreToLevel(nationalityScore.score) },
+      countryCode: { ...countryCodeScore, level: scoreToLevel(countryCodeScore.score) },
+      documentType: { ...documentTypeScore, level: scoreToLevel(documentTypeScore.score) },
+      documentNumber: { ...documentNumberScore, level: scoreToLevel(documentNumberScore.score) },
+      passportNumber: { ...passportNumberScore, level: scoreToLevel(passportNumberScore.score) },
+      idNumber: { ...idNumberScore, level: scoreToLevel(idNumberScore.score) },
+      issueDate: { ...issueDateScore, level: scoreToLevel(issueDateScore.score) },
+      expiryDate: { ...expiryDateScore, level: scoreToLevel(expiryDateScore.score) },
+      issuingCountry: { ...issuingCountryScore, level: scoreToLevel(issuingCountryScore.score) },
+      mrzRaw: { score: mrzRawScoreValue, level: scoreToLevel(mrzRawScoreValue), issues: mrzRawIssues },
+    };
+  }
+}
