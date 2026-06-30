@@ -1,5 +1,5 @@
 export const APP_NAME = "guestfill";
-export const APP_VERSION = "0.1.0";
+export { APP_VERSION } from "./version";
 
 // ───────────────────────── IndexedDB ─────────────────────────
 export const DB_NAME = "guestfill";

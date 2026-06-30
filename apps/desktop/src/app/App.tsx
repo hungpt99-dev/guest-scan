@@ -7,6 +7,7 @@ import GuestListScreen from "../screens/GuestListScreen";
 import FillAssistantScreen from "../screens/FillAssistantScreen";
 import TemplateManagerScreen from "../screens/TemplateManagerScreen";
 import SettingsScreen from "../screens/SettingsScreen";
+import LogScreen from "../screens/LogScreen";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/fill-assistant" element={<FillAssistantScreen />} />
         <Route path="/templates" element={<TemplateManagerScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
+        <Route path="/logs" element={<LogScreen />} />
       </Route>
     </Routes>
   );

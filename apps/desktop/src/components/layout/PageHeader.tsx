@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { label: "Fill Assistant", path: ROUTES.FILL },
   { label: "Templates", path: ROUTES.TEMPLATES },
   { label: "Settings", path: ROUTES.SETTINGS },
+  { label: "Logs", path: ROUTES.LOGS },
 ];
 
 export default function PageHeader() {

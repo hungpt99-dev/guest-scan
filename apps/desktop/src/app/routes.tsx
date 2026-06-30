@@ -7,4 +7,5 @@ export const ROUTES = {
   FILL_ASSISTANT: "/fill-assistant",
   TEMPLATES: "/templates",
   SETTINGS: "/settings",
+  LOGS: "/logs",
 } as const;
