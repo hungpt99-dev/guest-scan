@@ -1,6 +1,8 @@
 """Tesseract OCR engine wrapper."""
 
+import logging
 import subprocess
+import time
 
 import cv2
 import numpy as np
@@ -10,28 +12,51 @@ from PIL import Image
 from guestfill_ocr.common.errors import OcrError
 from guestfill_ocr.common.result import Err, Ok, Result
 
+logger = logging.getLogger("guestfill_ocr.tesseract_engine")
+
 MRZ_CONFIG = "-c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789< --psm 6"
 GENERIC_CONFIG = "--psm 3"
 
 _TESSERACT_CHECKED = False
 _TESSERACT_AVAILABLE = False
 
+_TESSERACT_RETRY_ATTEMPTS = 2
+_TESSERACT_RETRY_BACKOFF = 1.0
+
 
 def check_tesseract_available() -> bool:
     global _TESSERACT_CHECKED, _TESSERACT_AVAILABLE
     if _TESSERACT_CHECKED:
         return _TESSERACT_AVAILABLE
-    try:
-        result = subprocess.run(
-            [pytesseract.pytesseract.tesseract_cmd, "--version"],
-            capture_output=True,
-            timeout=5,
-        )
-        _TESSERACT_AVAILABLE = result.returncode == 0
-    except Exception:
-        _TESSERACT_AVAILABLE = False
+    for attempt in range(1, _TESSERACT_RETRY_ATTEMPTS + 1):
+        try:
+            result = subprocess.run(
+                [pytesseract.pytesseract.tesseract_cmd, "--version"],
+                capture_output=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                _TESSERACT_AVAILABLE = True
+                _TESSERACT_CHECKED = True
+                return True
+            logger.warning(
+                "Tesseract version check attempt %d/%d failed | returncode=%d",
+                attempt,
+                _TESSERACT_RETRY_ATTEMPTS,
+                result.returncode,
+            )
+        except Exception as e:
+            logger.warning(
+                "Tesseract version check attempt %d/%d raised | error=%s",
+                attempt,
+                _TESSERACT_RETRY_ATTEMPTS,
+                e,
+            )
+        if attempt < _TESSERACT_RETRY_ATTEMPTS:
+            time.sleep(_TESSERACT_RETRY_BACKOFF * attempt)
+    _TESSERACT_AVAILABLE = False
     _TESSERACT_CHECKED = True
-    return _TESSERACT_AVAILABLE
+    return False
 
 
 def run_tesseract_ocr(

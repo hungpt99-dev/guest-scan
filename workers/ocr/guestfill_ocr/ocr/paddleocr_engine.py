@@ -12,6 +12,7 @@ from __future__ import annotations
 import concurrent.futures
 import logging
 import threading
+import time
 from typing import Any
 
 import cv2
@@ -47,6 +48,9 @@ MRZ_FORMAT_LINES: dict[int, int] = {
 }
 
 MRZ_LINE1_START_PREFIXES = ("P<", "P", "I<", "ID", "V<")
+
+PPOCR_INIT_RETRY_ATTEMPTS = 3
+PPOCR_INIT_RETRY_BACKOFF = 1.0
 
 SUPPORTED_PPOCR_LANGS: dict[str, str] = {
     "ml": "multilingual",
@@ -104,17 +108,21 @@ def check_paddleocr_has_gpu() -> bool:
 
 def _get_paddleocr_instance(lang: str = DEFAULT_PPOCR_LANG, use_gpu: bool | None = None) -> Any:
     global _PPOCR_INSTANCES, _PPOCR_AVAILABLE, _PPOCR_CHECKED
-    if lang not in _PPOCR_INSTANCES:
-        with _PPOCR_INSTANCES_LOCK:
-            if lang in _PPOCR_INSTANCES:
-                return _PPOCR_INSTANCES[lang]
-            logger.info("Initializing PaddleOCR instance | lang=%s use_gpu=%s", lang, use_gpu)
-            if use_gpu is None:
-                use_gpu = check_paddleocr_has_gpu()
-                logger.info("PaddleOCR GPU check | has_gpu=%s", use_gpu)
-            try:
-                from paddleocr import PaddleOCR
+    if lang in _PPOCR_INSTANCES:
+        return _PPOCR_INSTANCES[lang]
+    with _PPOCR_INSTANCES_LOCK:
+        if lang in _PPOCR_INSTANCES:
+            return _PPOCR_INSTANCES[lang]
+        logger.info("Initializing PaddleOCR instance | lang=%s use_gpu=%s", lang, use_gpu)
+        if use_gpu is None:
+            use_gpu = check_paddleocr_has_gpu()
+            logger.info("PaddleOCR GPU check | has_gpu=%s", use_gpu)
 
+        from paddleocr import PaddleOCR
+
+        last_exception: Exception | None = None
+        for attempt in range(1, PPOCR_INIT_RETRY_ATTEMPTS + 1):
+            try:
                 _PPOCR_INSTANCES[lang] = PaddleOCR(
                     lang=lang,
                     use_angle_cls=False,
@@ -124,21 +132,39 @@ def _get_paddleocr_instance(lang: str = DEFAULT_PPOCR_LANG, use_gpu: bool | None
                     det_db_box_thresh=0.5,
                     rec_batch_num=6,
                 )
-                logger.info("PaddleOCR instance created successfully | lang=%s", lang)
+                logger.info(
+                    "PaddleOCR instance created successfully | lang=%s attempt=%d",
+                    lang,
+                    attempt,
+                )
+                return _PPOCR_INSTANCES[lang]
             except Exception as e:
-                logger.error(
-                    "PaddleOCR constructor failed | lang=%s use_gpu=%s error=%s",
+                last_exception = e
+                logger.warning(
+                    "PaddleOCR constructor attempt %d/%d failed | lang=%s use_gpu=%s error=%s",
+                    attempt,
+                    PPOCR_INIT_RETRY_ATTEMPTS,
                     lang,
                     use_gpu,
                     e,
-                    exc_info=True,
+                    exc_info=(attempt == PPOCR_INIT_RETRY_ATTEMPTS),
                 )
-                _PPOCR_AVAILABLE = False
-                _PPOCR_CHECKED = True
-                raise RuntimeError(
-                    f"PaddleOCR initialization failed for lang={lang}: {e}"
-                ) from e
-    return _PPOCR_INSTANCES[lang]
+                if attempt < PPOCR_INIT_RETRY_ATTEMPTS:
+                    sleep_secs = PPOCR_INIT_RETRY_BACKOFF * attempt
+                    logger.info(
+                        "Retrying PaddleOCR initialization in %.1fs | lang=%s attempt=%d",
+                        sleep_secs,
+                        lang,
+                        attempt,
+                    )
+                    time.sleep(sleep_secs)
+
+        _PPOCR_AVAILABLE = False
+        _PPOCR_CHECKED = True
+        raise RuntimeError(
+            f"PaddleOCR initialization failed after {PPOCR_INIT_RETRY_ATTEMPTS} attempts "
+            f"for lang={lang}: {last_exception}"
+        ) from last_exception
 
 
 def reset_paddleocr_instance(lang: str | None = None) -> None:

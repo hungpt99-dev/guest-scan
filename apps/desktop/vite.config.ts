@@ -17,7 +17,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "../../tests/e2e/**/*.test.ts", "../../tests/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "../../tests/e2e/**/*.test.ts", "../../tests/*.test.ts", "../../workers/ocr/guestfill_ocr/tests/*.test.ts"],
     globals: true,
   },
 });
