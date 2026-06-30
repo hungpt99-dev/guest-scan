@@ -1,7 +1,10 @@
+use crate::app_state::AppSettings;
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
-use std::process::Command;
 use std::fs;
+use std::path::Path;
+use std::process::Command;
+use tauri::State;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +51,16 @@ pub struct OcrSummary {
 }
 
 #[tauri::command]
-pub async fn run_ocr(request: OcrRequest) -> Result<OcrJobResult, AppError> {
+pub async fn run_ocr(
+    app_state: State<'_, crate::app_state::AppState>,
+    request: OcrRequest,
+) -> Result<OcrJobResult, AppError> {
+    let settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| AppError::new("LOCK_ERROR", "Failed to read OCR settings"))?
+        .clone();
+
     let job_id = uuid::Uuid::new_v4().to_string();
 
     let temp_dir = std::env::temp_dir().join("guestfill_ocr_jobs").join(&job_id);
@@ -86,7 +98,7 @@ pub async fn run_ocr(request: OcrRequest) -> Result<OcrJobResult, AppError> {
         AppError::with_technical("REQUEST_WRITE_FAILED", "Could not write request file", e.to_string())
     })?;
 
-    let (worker_path, worker_args) = build_worker_command();
+    let (worker_path, worker_args) = build_worker_command(&settings);
 
     let mut cmd = Command::new(&worker_path);
     cmd.args(&worker_args);
@@ -157,14 +169,33 @@ pub async fn run_ocr_placeholder(request: OcrRequest) -> OcrJobResult {
     }
 }
 
-fn build_worker_command() -> (String, Vec<String>) {
-    // Prefer packaged executable, fall back to python -m guestfill_ocr
+fn build_worker_command(settings: &AppSettings) -> (String, Vec<String>) {
+    let args = || vec!["-m".to_string(), "guestfill_ocr".to_string()];
+
+    // 1. Prefer pre-packaged executable
     for exe in &["guestfill-ocr.exe", "guestfill-ocr"] {
         if Command::new(exe).arg("--help").output().is_ok() {
             return (exe.to_string(), vec![]);
         }
     }
 
+    // 2. Use configured worker path from settings
+    if !settings.ocr_worker_path.is_empty() {
+        return (settings.ocr_worker_path.clone(), args());
+    }
+
+    // 3. Try project's virtual environment (development workflow)
+    for candidate in &[
+        "workers/ocr/.venv/bin/python3",
+        ".venv/bin/python3",
+        "venv/bin/python3",
+    ] {
+        if Path::new(candidate).exists() {
+            return (candidate.to_string(), args());
+        }
+    }
+
+    // 4. Fall back to system python
     let python = if cfg!(target_os = "windows") { "python" } else { "python3" };
-    (python.to_string(), vec!["-m".to_string(), "guestfill_ocr".to_string()])
+    (python.to_string(), args())
 }
