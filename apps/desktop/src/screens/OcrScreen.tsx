@@ -20,7 +20,8 @@ export default function OcrScreen() {
         setError(null);
       }
     } catch (e) {
-      setError(`Could not open file dialog: ${e}`);
+      console.error("File dialog error:", e);
+      setError(`Could not open file dialog: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -32,7 +33,8 @@ export default function OcrScreen() {
         setError(null);
       }
     } catch (e) {
-      setError(`Could not open folder dialog: ${e}`);
+      console.error("Folder dialog error:", e);
+      setError(`Could not open folder dialog: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -44,7 +46,8 @@ export default function OcrScreen() {
         setError(null);
       }
     } catch (e) {
-      setError(`Could not open save dialog: ${e}`);
+      console.error("Save dialog error:", e);
+      setError(`Could not open save dialog: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
@@ -77,7 +80,14 @@ export default function OcrScreen() {
         setError(`OCR failed: ${errorMsg}`);
       }
     } catch (e) {
-      setError(`Failed to run OCR: ${e}`);
+      console.error("OCR run error:", e);
+      const errorMessage =
+        e instanceof Error
+          ? e.message
+          : typeof e === "object" && e !== null
+            ? JSON.stringify(e)
+            : String(e);
+      setError(`Failed to run OCR: ${errorMessage}`);
     } finally {
       setProcessing(false);
     }
