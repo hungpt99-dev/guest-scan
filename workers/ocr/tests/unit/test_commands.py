@@ -51,7 +51,7 @@ class TestTryWriteResponse:
 
     def test_handles_bad_path_gracefully(self) -> None:
         result = _try_write_response("/nonexistent/dir/response.json", {"status": "FAILED"}, "test")
-        assert result is None
+        assert result is False
 
     def test_handles_read_only_directory(self) -> None:
         import stat
@@ -63,7 +63,7 @@ class TestTryWriteResponse:
 
         try:
             result = _try_write_response(path, {"status": "FAILED"}, "test")
-            assert result is None
+            assert result is False
         finally:
             os.chmod(d, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
             os.rmdir(d)

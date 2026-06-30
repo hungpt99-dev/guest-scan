@@ -13,6 +13,11 @@ _FRIENDLY_UNKNOWN = (
     "Please try again with fewer files or contact support."
 )
 
+_FRIENDLY_TIMEOUT = (
+    "OCR processing timed out. Some documents may be too complex or large. "
+    "Please try with fewer files or reduce per-image timeout."
+)
+
 
 def process_ocr_job(request: dict) -> Result[dict]:
     job_id = request.get("jobId", "unknown")
@@ -65,6 +70,23 @@ def process_ocr_job(request: dict) -> Result[dict]:
         error = OcrError(
             "OCR_FAILED",
             "The system ran out of memory. Please reduce the batch size and try again.",
+        )
+        return Ok(_build_fatal_error(request, error))
+    except TimeoutError:
+        logger.error("Job %s | TimeoutError — processing timed out", job_id)
+        error = OcrError("OCR_TIMEOUT", _FRIENDLY_TIMEOUT)
+        return Ok(_build_fatal_error(request, error))
+    except OSError as e:
+        logger.error(
+            "Job %s | OS error | errno=%s message=%s",
+            job_id,
+            e.errno,
+            e.strerror,
+        )
+        error = OcrError(
+            "OS_ERROR",
+            f"A file system error occurred: {e.strerror or e}",
+            technical_detail=str(e),
         )
         return Ok(_build_fatal_error(request, error))
     except Exception as e:

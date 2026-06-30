@@ -1,6 +1,7 @@
 """CLI command definitions."""
 
 import argparse
+import json
 import logging
 import sys
 import traceback
@@ -82,14 +83,36 @@ def _build_crash_response(job_id: str, exc: Exception) -> dict:
     }
 
 
-def _try_write_response(response_path: str, data: dict, job_id: str) -> None:
+def _try_write_response(response_path: str, data: dict, job_id: str) -> bool:
     try:
         write_response(response_path, data)
+        return True
     except Exception as e:
         logger.error(
             "Job %s | failed to write response file | path=%s error=%s",
             job_id,
             response_path,
+            e,
+        )
+        _try_write_fallback(response_path, data, job_id)
+        return False
+
+
+def _try_write_fallback(response_path: str, data: dict, job_id: str) -> None:
+    fallback_path = response_path + ".bak"
+    try:
+        with open(fallback_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        logger.warning(
+            "Job %s | response written to fallback path | path=%s",
+            job_id,
+            fallback_path,
+        )
+    except Exception as e:
+        logger.error(
+            "Job %s | fallback write also failed | fallback=%s error=%s",
+            job_id,
+            fallback_path,
             e,
         )
 
