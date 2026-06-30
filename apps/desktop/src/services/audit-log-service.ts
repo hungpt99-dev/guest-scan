@@ -99,7 +99,8 @@ function maskByKey(key: string, value: unknown): unknown {
   ) {
     return maskFullName(value);
   }
-  if (/mrz/i.test(key)) return value.length > 10 ? value.slice(0, MASK_MRZ_SHOW_CHARS) + MASK_MRZ_SUFFIX : MASK_MRZ_SUFFIX;
+  if (/mrz/i.test(key))
+    return value.length > 10 ? value.slice(0, MASK_MRZ_SHOW_CHARS) + MASK_MRZ_SUFFIX : MASK_MRZ_SUFFIX;
   if (/image/i.test(key)) return "[REDACTED]";
   if (value.length <= MASK_SHORT_VALUE_LENGTH) return value;
   return value.slice(0, MASK_SHOW_CHARS) + MASK_MRZ_SUFFIX + value.slice(-1);

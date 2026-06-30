@@ -195,7 +195,21 @@ fn build_worker_command(settings: &AppSettings) -> (String, Vec<String>) {
         }
     }
 
-    // 4. Fall back to system python
+    // 4. Resolve absolute path relative to the executable location.
+    //    This handles both `pnpm tauri dev` (target/debug/) and
+    //    the built .app bundle when the project tree is accessible.
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            for ancestor in exe_dir.ancestors() {
+                let candidate = ancestor.join("workers/ocr/.venv/bin/python3");
+                if candidate.exists() {
+                    return (candidate.to_string_lossy().to_string(), args());
+                }
+            }
+        }
+    }
+
+    // 5. Fall back to system python
     let python = if cfg!(target_os = "windows") { "python" } else { "python3" };
     (python.to_string(), args())
 }

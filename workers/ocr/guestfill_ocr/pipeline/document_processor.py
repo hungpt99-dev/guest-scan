@@ -19,7 +19,7 @@ from guestfill_ocr.id_card.id_card_ocr import process_id_card
 from guestfill_ocr.image.image_loader import load_image
 from guestfill_ocr.image.orientation import fix_exif_orientation
 from guestfill_ocr.image.paddleocr_preprocess import preprocess_for_paddleocr
-from guestfill_ocr.image.preprocess import adaptive_preprocess, to_grayscale
+from guestfill_ocr.image.preprocess import preprocess_pipeline, to_grayscale
 from guestfill_ocr.image.quality_analyzer import analyze_quality
 from guestfill_ocr.image.resize import resize_keep_ratio
 from guestfill_ocr.ocr.ocr_candidate import generate_ocr_candidates
@@ -98,7 +98,17 @@ def process_document(file_path: str, options: dict) -> Result:
             processed_gray = to_grayscale(processed)
             mrz_candidates = generate_all_candidates(processed_gray)
         else:
-            processed = adaptive_preprocess(gray, quality)
+            import cv2
+
+            tesseract_upscale = options.get("tesseractUpscale", 2.0)
+            if tesseract_upscale != 1.0:
+                h, w = gray.shape
+                upscaled = cv2.resize(
+                    gray, (int(w * tesseract_upscale), int(h * tesseract_upscale)), interpolation=cv2.INTER_CUBIC
+                )
+            else:
+                upscaled = gray
+            processed = preprocess_pipeline(upscaled)
             mrz_candidates = generate_all_candidates(processed)
         ocr_candidate_inputs = [
             {

@@ -49,6 +49,19 @@ def try_repair_mrz(line1: str, line2: str, line3: str | None = None) -> tuple[li
     if l1 >= MRZ_TD2_LENGTH and l2 >= MRZ_TD2_LENGTH:
         return _repair_td2(line1, line2)
 
+    # Lines too short - pad and try repair against the most likely format
+    if l2 >= 40:
+        padded_l1 = (line1 or "") + "<" * (MRZ_TD3_LENGTH - l1) if l1 < MRZ_TD3_LENGTH else (line1 or "")
+        padded_l2 = (line2 or "") + "<" * (MRZ_TD3_LENGTH - l2) if l2 < MRZ_TD3_LENGTH else (line2 or "")
+        return _repair_td3(padded_l1, padded_l2)
+    if l2 >= 30:
+        padded_l1 = (line1 or "") + "<" * (MRZ_TD1_LENGTH - l1) if l1 < MRZ_TD1_LENGTH else (line1 or "")
+        padded_l2 = (line2 or "") + "<" * (MRZ_TD1_LENGTH - l2) if l2 < MRZ_TD1_LENGTH else (line2 or "")
+        if line3 is not None:
+            padded_l3 = (line3 or "") + "<" * (MRZ_TD1_LENGTH - l3) if l3 < MRZ_TD1_LENGTH else (line3 or "")
+            return _repair_td1(padded_l1, padded_l2, padded_l3)
+        return _repair_td2(padded_l1, padded_l2)
+
     return [line1, line2], ["FORMAT_UNKNOWN"]
 
 

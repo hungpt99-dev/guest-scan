@@ -25,9 +25,7 @@ def process_ocr_job(request: dict) -> Result[dict]:
 
     try:
         response = run_job(request)
-        error_codes = [
-            e.get("code") for e in response.get("errors", []) if isinstance(e, dict)
-        ]
+        error_codes = [e.get("code") for e in response.get("errors", []) if isinstance(e, dict)]
         logger.info(
             "Job %s | run_job completed | status=%s errors=%s",
             job_id,

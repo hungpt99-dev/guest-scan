@@ -13,24 +13,81 @@ from guestfill_ocr.passport.mrz_validator import (
 )
 
 
+def _pad_line(line: str, length: int) -> str:
+    """Pad a line to the expected length with < characters."""
+    if len(line) >= length:
+        return line
+    return line + "<" * (length - len(line))
+
+
+def _try_parse_all(line1: str, line2: str, line3: str | None) -> dict:
+    """Try all MRZ formats and return the one with the most data."""
+    candidates: list[tuple[str, dict]] = []
+
+    padded_td3_l1 = _pad_line(line1, 44)
+    padded_td3_l2 = _pad_line(line2, 44)
+    fields_td3 = _parse_td3(padded_td3_l1, padded_td3_l2)
+    candidates.append(("TD3", fields_td3))
+
+    padded_td2_l1 = _pad_line(line1, 36)
+    padded_td2_l2 = _pad_line(line2, 36)
+    fields_td2 = _parse_td2(padded_td2_l1, padded_td2_l2)
+    candidates.append(("TD2", fields_td2))
+
+    padded_td1_l1 = _pad_line(line1, 30)
+    padded_td1_l2 = _pad_line(line2, 30)
+    padded_td1_l3 = _pad_line(line3 if isinstance(line3, str) else "", 30)
+    fields_td1 = _parse_td1(padded_td1_l1, padded_td1_l2, padded_td1_l3)
+    candidates.append(("TD1", fields_td1))
+
+    def score_fields(f: dict) -> int:
+        score = 0
+        if f.get("passport_number"):
+            score += 10
+        if f.get("surname"):
+            score += 5
+        if f.get("given_name"):
+            score += 5
+        if f.get("date_of_birth"):
+            score += 5
+        if f.get("passport_expiry_date"):
+            score += 5
+        if f.get("gender", "UNKNOWN") != "UNKNOWN":
+            score += 3
+        if f.get("nationality"):
+            score += 3
+        cd = f.get("check_digits", {})
+        if cd.get("overall_valid"):
+            score += 20
+        return score
+
+    best = max(candidates, key=lambda c: score_fields(c[1]))
+    return best[1]
+
+
 def parse_mrz_lines(line1: str, line2: str, line3: str | None = None) -> dict:
-    fields = _empty_fields()
     format_type, _detected = _detect_format(line1, line2, line3)
 
     if format_type == "TD3":
         return _parse_td3(line1, line2)
     if format_type == "TD1":
-        return _parse_td1(line1, line2, line3 if isinstance(line3, str) else "")
+        fields = _parse_td1(line1, line2, line3 if isinstance(line3, str) else "")
+        has_data = bool(fields.get("passport_number") or fields.get("surname"))
+        if has_data and fields.get("date_of_birth"):
+            return fields
+        all_fields = _try_parse_all(line1, line2, line3)
+        td3_date = all_fields.get("date_of_birth", "")
+        if td3_date or not has_data:
+            return all_fields
+        return fields
     if format_type == "TD2":
         return _parse_td2(line1, line2)
 
-    return fields
+    return _try_parse_all(line1, line2, line3)
 
 
 def parse_mrz_lines_result(line1: str, line2: str, line3: str | None = None) -> Result:
     format_type, detected = _detect_format(line1, line2, line3)
-    if format_type is None:
-        return Err({"code": "MRZ_FORMAT_UNKNOWN", "message": "Could not determine MRZ format"})
 
     if format_type == "TD3":
         fields = _parse_td3(line1, line2)
@@ -41,6 +98,13 @@ def parse_mrz_lines_result(line1: str, line2: str, line3: str | None = None) -> 
     if format_type == "TD2":
         fields = _parse_td2(line1, line2)
         return Ok(fields)
+
+    if format_type is None:
+        fields = _try_parse_all(line1, line2, line3)
+        has_data = bool(fields.get("passport_number") or fields.get("surname"))
+        if has_data:
+            return Ok(fields)
+        return Err({"code": "MRZ_FORMAT_UNKNOWN", "message": "Could not determine MRZ format"})
 
     return Err({"code": "MRZ_FORMAT_UNKNOWN", "message": "Could not determine MRZ format"})
 

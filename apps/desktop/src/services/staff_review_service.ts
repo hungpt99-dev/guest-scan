@@ -128,7 +128,9 @@ class DefaultStaffReviewService implements StaffReviewService {
       return pending;
     }
 
-    const maskedValue = fieldName.toLowerCase().includes("number") ? value.slice(0, STAFF_REVIEW_MASK_OFFSET) + "***" : value;
+    const maskedValue = fieldName.toLowerCase().includes("number")
+      ? value.slice(0, STAFF_REVIEW_MASK_OFFSET) + "***"
+      : value;
 
     logger.info("StaffReviewService: staff edited field", {
       field: fieldName,

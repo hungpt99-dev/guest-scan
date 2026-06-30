@@ -40,9 +40,7 @@ export default function LogTab() {
         ) : (
           logs.map((entry, i) => (
             <div key={i} className="flex gap-2 py-0.5">
-              <span className="shrink-0 text-gray-400">
-                {new Date(entry.timestamp).toLocaleTimeString()}
-              </span>
+              <span className="shrink-0 text-gray-400">{new Date(entry.timestamp).toLocaleTimeString()}</span>
               <span className="text-gray-700">{entry.message}</span>
             </div>
           ))

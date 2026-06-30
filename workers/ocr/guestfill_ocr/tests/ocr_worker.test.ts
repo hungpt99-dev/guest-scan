@@ -49,10 +49,7 @@ function createMrzParseResult(overrides = {}) {
       final_composite_valid: true,
       overall_valid: true,
     },
-    mrzLines: [
-      "P<UTOMUSTER<<JOHN<MICHAEL<<<<<<<<<<<<<<<<<<<<<<<",
-      "AB123456<7UTO8510101M2001011<<<<<<<<<<<<<<<<04",
-    ],
+    mrzLines: ["P<UTOMUSTER<<JOHN<MICHAEL<<<<<<<<<<<<<<<<<<<<<<<", "AB123456<7UTO8510101M2001011<<<<<<<<<<<<<<<<04"],
     ...overrides,
   };
 }
@@ -73,10 +70,7 @@ function createNormalizedFields(overrides = {}) {
     expiryDate: "2020-01-01",
     issuingCountry: "UTO",
     mrzRaw: "P<UTOMUSTER<<JOHN<MICHAEL<<<<<<<<<<<<<<<<<<<<<<<\nAB123456<7UTO8510101M2001011<<<<<<<<<<<<<<<<04",
-    mrzParsed: [
-      "P<UTOMUSTER<<JOHN<MICHAEL<<<<<<<<<<<<<<<<<<<<<<<",
-      "AB123456<7UTO8510101M2001011<<<<<<<<<<<<<<<<04",
-    ],
+    mrzParsed: ["P<UTOMUSTER<<JOHN<MICHAEL<<<<<<<<<<<<<<<<<<<<<<<", "AB123456<7UTO8510101M2001011<<<<<<<<<<<<<<<<04"],
   };
   return { ...base, ...overrides };
 }
@@ -344,7 +338,16 @@ describe("OCR Worker — Error Handling", () => {
 
       vi.mocked(mocks.imageQuality.analyzeImage).mockResolvedValue({
         passed: true,
-        metrics: { blurScore: 85, brightness: 128, contrast: 55, glareRatio: 0.02, skewAngle: 1.5, width: 1200, height: 900, edgeVisibilityScore: 0.85 },
+        metrics: {
+          blurScore: 85,
+          brightness: 128,
+          contrast: 55,
+          glareRatio: 0.02,
+          skewAngle: 1.5,
+          width: 1200,
+          height: 900,
+          edgeVisibilityScore: 0.85,
+        },
         warnings: [],
       });
 
@@ -382,7 +385,16 @@ describe("OCR Worker — Error Handling", () => {
 
       vi.mocked(mocks.imageQuality.analyzeImage).mockResolvedValue({
         passed: true,
-        metrics: { blurScore: 85, brightness: 128, contrast: 55, glareRatio: 0.02, skewAngle: 1.5, width: 1200, height: 900, edgeVisibilityScore: 0.85 },
+        metrics: {
+          blurScore: 85,
+          brightness: 128,
+          contrast: 55,
+          glareRatio: 0.02,
+          skewAngle: 1.5,
+          width: 1200,
+          height: 900,
+          edgeVisibilityScore: 0.85,
+        },
         warnings: [],
       });
 
@@ -427,7 +439,16 @@ describe("OCR Worker — Error Handling", () => {
 
       vi.mocked(mocks.imageQuality.analyzeImage).mockResolvedValue({
         passed: true,
-        metrics: { blurScore: 85, brightness: 128, contrast: 55, glareRatio: 0.02, skewAngle: 1.5, width: 1200, height: 900, edgeVisibilityScore: 0.85 },
+        metrics: {
+          blurScore: 85,
+          brightness: 128,
+          contrast: 55,
+          glareRatio: 0.02,
+          skewAngle: 1.5,
+          width: 1200,
+          height: 900,
+          edgeVisibilityScore: 0.85,
+        },
         warnings: [],
       });
 
@@ -473,7 +494,16 @@ describe("OCR Worker — Error Handling", () => {
 
       vi.mocked(mocks.imageQuality.analyzeImage).mockResolvedValue({
         passed: true,
-        metrics: { blurScore: 85, brightness: 128, contrast: 55, glareRatio: 0.02, skewAngle: 1.5, width: 1200, height: 900, edgeVisibilityScore: 0.85 },
+        metrics: {
+          blurScore: 85,
+          brightness: 128,
+          contrast: 55,
+          glareRatio: 0.02,
+          skewAngle: 1.5,
+          width: 1200,
+          height: 900,
+          edgeVisibilityScore: 0.85,
+        },
         warnings: [],
       });
 
@@ -521,7 +551,16 @@ describe("OCR Worker — Error Handling", () => {
 
       vi.mocked(mocks.imageQuality.analyzeImage).mockResolvedValue({
         passed: true,
-        metrics: { blurScore: 85, brightness: 128, contrast: 55, glareRatio: 0.02, skewAngle: 1.5, width: 1200, height: 900, edgeVisibilityScore: 0.85 },
+        metrics: {
+          blurScore: 85,
+          brightness: 128,
+          contrast: 55,
+          glareRatio: 0.02,
+          skewAngle: 1.5,
+          width: 1200,
+          height: 900,
+          edgeVisibilityScore: 0.85,
+        },
         warnings: [],
       });
 
@@ -540,7 +579,16 @@ describe("OCR Worker — Error Handling", () => {
       const mocks = makeMocks();
       vi.mocked(mocks.imageQuality.analyzeImage).mockResolvedValue({
         passed: false,
-        metrics: { blurScore: 10, brightness: 100, contrast: 40, glareRatio: 0.02, skewAngle: 1.0, width: 1200, height: 900, edgeVisibilityScore: 0.5 },
+        metrics: {
+          blurScore: 10,
+          brightness: 100,
+          contrast: 40,
+          glareRatio: 0.02,
+          skewAngle: 1.0,
+          width: 1200,
+          height: 900,
+          edgeVisibilityScore: 0.5,
+        },
         warnings: ["BLURRY"],
       });
 
@@ -572,7 +620,16 @@ describe("OCR Worker — Error Handling", () => {
       vi.mocked(mocks.imageQuality.analyzeImage).mockImplementation(async () => {
         return {
           passed: false,
-          metrics: { blurScore: 10, brightness: 100, contrast: 40, glareRatio: 0.02, skewAngle: 1.0, width: 1200, height: 900, edgeVisibilityScore: 0.5 },
+          metrics: {
+            blurScore: 10,
+            brightness: 100,
+            contrast: 40,
+            glareRatio: 0.02,
+            skewAngle: 1.0,
+            width: 1200,
+            height: 900,
+            edgeVisibilityScore: 0.5,
+          },
           warnings: ["BLURRY"],
         };
       });
@@ -659,7 +716,16 @@ describe("OCR Worker — Error Handling", () => {
 
       vi.mocked(mocks.imageQuality.analyzeImage).mockResolvedValue({
         passed: true,
-        metrics: { blurScore: 85, brightness: 128, contrast: 55, glareRatio: 0.02, skewAngle: 1.5, width: 1200, height: 900, edgeVisibilityScore: 0.85 },
+        metrics: {
+          blurScore: 85,
+          brightness: 128,
+          contrast: 55,
+          glareRatio: 0.02,
+          skewAngle: 1.5,
+          width: 1200,
+          height: 900,
+          edgeVisibilityScore: 0.85,
+        },
         warnings: [],
       });
 
@@ -743,7 +809,16 @@ describe("OCR Worker — Error Handling", () => {
 
       vi.mocked(mocks.imageQuality.analyzeImage).mockResolvedValue({
         passed: true,
-        metrics: { blurScore: 85, brightness: 128, contrast: 55, glareRatio: 0.02, skewAngle: 1.5, width: 1200, height: 900, edgeVisibilityScore: 0.85 },
+        metrics: {
+          blurScore: 85,
+          brightness: 128,
+          contrast: 55,
+          glareRatio: 0.02,
+          skewAngle: 1.5,
+          width: 1200,
+          height: 900,
+          edgeVisibilityScore: 0.85,
+        },
         warnings: [],
       });
 
@@ -774,13 +849,9 @@ describe("OCR Worker — Error Handling", () => {
         confidence: 0.92,
       });
 
-      vi.mocked(mocks.paddleOcr.extractText).mockResolvedValue(
-        createMockOcrResult({ averageConfidence: 0.3 }),
-      );
+      vi.mocked(mocks.paddleOcr.extractText).mockResolvedValue(createMockOcrResult({ averageConfidence: 0.3 }));
 
-      vi.mocked(mocks.tesseractOcr.extractText).mockResolvedValue(
-        createMockOcrResult({ averageConfidence: 0.9 }),
-      );
+      vi.mocked(mocks.tesseractOcr.extractText).mockResolvedValue(createMockOcrResult({ averageConfidence: 0.9 }));
 
       vi.mocked(mocks.mrzParser.parseMrzLines).mockReturnValue(createMrzParseResult());
       vi.mocked(mocks.checksumValidator.validateChecksums).mockReturnValue({

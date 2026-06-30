@@ -4,17 +4,15 @@
 import json
 import os
 import subprocess
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from guestfill_ocr.common.errors import OcrError
-from guestfill_ocr.common.result import Ok
-
 
 # ── PaddleOCR retry logic ──────────────────────────────────────────────
+
 
 class TestGetPaddleocrInstanceRetry:
     def test_succeeds_on_first_attempt(self) -> None:
@@ -25,9 +23,7 @@ class TestGetPaddleocrInstanceRetry:
                         "guestfill_ocr.ocr.paddleocr_engine.check_paddleocr_has_gpu",
                         return_value=False,
                     ):
-                        with patch(
-                            "guestfill_ocr.ocr.paddleocr_engine.PaddleOCR"
-                        ) as mock_paddle:
+                        with patch("guestfill_ocr.ocr.paddleocr_engine.PaddleOCR") as mock_paddle:
                             from guestfill_ocr.ocr.paddleocr_engine import (
                                 _get_paddleocr_instance,
                             )
@@ -71,15 +67,9 @@ class TestGetPaddleocrInstanceRetry:
         with patch("guestfill_ocr.ocr.paddleocr_engine._PPOCR_INSTANCES", {}):
             with patch("guestfill_ocr.ocr.paddleocr_engine._PPOCR_AVAILABLE", True):
                 with patch("guestfill_ocr.ocr.paddleocr_engine._PPOCR_CHECKED", False):
-                    with patch(
-                        "guestfill_ocr.ocr.paddleocr_engine.PPOCR_INIT_RETRY_ATTEMPTS", 2
-                    ):
-                        with patch(
-                            "guestfill_ocr.ocr.paddleocr_engine.PPOCR_INIT_RETRY_BACKOFF", 0.1
-                        ):
-                            with patch(
-                                "guestfill_ocr.ocr.paddleocr_engine.time.sleep"
-                            ):
+                    with patch("guestfill_ocr.ocr.paddleocr_engine.PPOCR_INIT_RETRY_ATTEMPTS", 2):
+                        with patch("guestfill_ocr.ocr.paddleocr_engine.PPOCR_INIT_RETRY_BACKOFF", 0.1):
+                            with patch("guestfill_ocr.ocr.paddleocr_engine.time.sleep"):
                                 with patch(
                                     "guestfill_ocr.ocr.paddleocr_engine.check_paddleocr_has_gpu",
                                     return_value=False,
@@ -97,23 +87,18 @@ class TestGetPaddleocrInstanceRetry:
                                             RuntimeError,
                                             match="PaddleOCR initialization failed after 2 attempts",
                                         ):
-                                            _get_paddleocr_instance(
-                                                lang="ml", use_gpu=False
-                                            )
+                                            _get_paddleocr_instance(lang="ml", use_gpu=False)
                                         assert _PPOCR_AVAILABLE is False
 
     def test_exponential_backoff_delays(self) -> None:
         delays = []
-        original_sleep = time.sleep
 
         def capture_sleep(secs: float) -> None:
             delays.append(secs)
 
         with patch("guestfill_ocr.ocr.paddleocr_engine._PPOCR_INSTANCES", {}):
             with patch("guestfill_ocr.ocr.paddleocr_engine.PPOCR_INIT_RETRY_ATTEMPTS", 4):
-                with patch(
-                    "guestfill_ocr.ocr.paddleocr_engine.PPOCR_INIT_RETRY_BACKOFF", 1.0
-                ):
+                with patch("guestfill_ocr.ocr.paddleocr_engine.PPOCR_INIT_RETRY_BACKOFF", 1.0):
                     with patch(
                         "guestfill_ocr.ocr.paddleocr_engine.time.sleep",
                         side_effect=capture_sleep,
@@ -138,12 +123,8 @@ class TestGetPaddleocrInstanceRetry:
         with patch("guestfill_ocr.ocr.paddleocr_engine._PPOCR_INSTANCES", {}):
             with patch("guestfill_ocr.ocr.paddleocr_engine._PPOCR_AVAILABLE", True):
                 with patch("guestfill_ocr.ocr.paddleocr_engine._PPOCR_CHECKED", False):
-                    with patch(
-                        "guestfill_ocr.ocr.paddleocr_engine.PPOCR_INIT_RETRY_ATTEMPTS", 1
-                    ):
-                        with patch(
-                            "guestfill_ocr.ocr.paddleocr_engine.time.sleep"
-                        ):
+                    with patch("guestfill_ocr.ocr.paddleocr_engine.PPOCR_INIT_RETRY_ATTEMPTS", 1):
+                        with patch("guestfill_ocr.ocr.paddleocr_engine.time.sleep"):
                             with patch(
                                 "guestfill_ocr.ocr.paddleocr_engine.check_paddleocr_has_gpu",
                                 return_value=False,
@@ -161,22 +142,19 @@ class TestGetPaddleocrInstanceRetry:
                                             _get_paddleocr_instance,
                                         )
 
-                                        _get_paddleocr_instance(
-                                            lang="ml", use_gpu=False
-                                        )
+                                        _get_paddleocr_instance(lang="ml", use_gpu=False)
                                     assert check_paddleocr_available() is False
 
 
 # ── Tesseract retry logic ─────────────────────────────────────────────
+
 
 class TestCheckTesseractAvailableRetry:
     def test_succeeds_on_first_attempt(self) -> None:
         with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_CHECKED", False):
             with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_AVAILABLE", False):
                 with patch("guestfill_ocr.ocr.tesseract_engine.time.sleep") as mock_sleep:
-                    with patch(
-                        "guestfill_ocr.ocr.tesseract_engine.subprocess.run"
-                    ) as mock_run:
+                    with patch("guestfill_ocr.ocr.tesseract_engine.subprocess.run") as mock_run:
                         mock_proc = MagicMock()
                         mock_proc.returncode = 0
                         mock_run.return_value = mock_proc
@@ -193,18 +171,10 @@ class TestCheckTesseractAvailableRetry:
     def test_retries_on_nonzero_returncode_then_succeeds(self) -> None:
         with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_CHECKED", False):
             with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_AVAILABLE", False):
-                with patch(
-                    "guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 3
-                ):
-                    with patch(
-                        "guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_BACKOFF", 1.0
-                    ):
-                        with patch(
-                            "guestfill_ocr.ocr.tesseract_engine.time.sleep"
-                        ) as mock_sleep:
-                            with patch(
-                                "guestfill_ocr.ocr.tesseract_engine.subprocess.run"
-                            ) as mock_run:
+                with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 3):
+                    with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_BACKOFF", 1.0):
+                        with patch("guestfill_ocr.ocr.tesseract_engine.time.sleep") as mock_sleep:
+                            with patch("guestfill_ocr.ocr.tesseract_engine.subprocess.run") as mock_run:
                                 mock_run.side_effect = [
                                     MagicMock(returncode=1),
                                     MagicMock(returncode=1),
@@ -223,15 +193,9 @@ class TestCheckTesseractAvailableRetry:
     def test_all_attempts_fail_returns_false(self) -> None:
         with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_CHECKED", False):
             with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_AVAILABLE", False):
-                with patch(
-                    "guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 2
-                ):
-                    with patch(
-                        "guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_BACKOFF", 0.1
-                    ):
-                        with patch(
-                            "guestfill_ocr.ocr.tesseract_engine.time.sleep"
-                        ):
+                with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 2):
+                    with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_BACKOFF", 0.1):
+                        with patch("guestfill_ocr.ocr.tesseract_engine.time.sleep"):
                             with patch(
                                 "guestfill_ocr.ocr.tesseract_engine.subprocess.run",
                                 return_value=MagicMock(returncode=1),
@@ -246,22 +210,12 @@ class TestCheckTesseractAvailableRetry:
     def test_retries_on_exception_then_succeeds(self) -> None:
         with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_CHECKED", False):
             with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_AVAILABLE", False):
-                with patch(
-                    "guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 2
-                ):
-                    with patch(
-                        "guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_BACKOFF", 0.5
-                    ):
-                        with patch(
-                            "guestfill_ocr.ocr.tesseract_engine.time.sleep"
-                        ) as mock_sleep:
-                            with patch(
-                                "guestfill_ocr.ocr.tesseract_engine.subprocess.run"
-                            ) as mock_run:
+                with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 2):
+                    with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_BACKOFF", 0.5):
+                        with patch("guestfill_ocr.ocr.tesseract_engine.time.sleep") as mock_sleep:
+                            with patch("guestfill_ocr.ocr.tesseract_engine.subprocess.run") as mock_run:
                                 mock_run.side_effect = [
-                                    subprocess.TimeoutExpired(
-                                        ["tesseract"], timeout=5
-                                    ),
+                                    subprocess.TimeoutExpired(["tesseract"], timeout=5),
                                     MagicMock(returncode=0),
                                 ]
 
@@ -277,17 +231,11 @@ class TestCheckTesseractAvailableRetry:
     def test_all_exceptions_fail_returns_false(self) -> None:
         with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_CHECKED", False):
             with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_AVAILABLE", False):
-                with patch(
-                    "guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 2
-                ):
-                    with patch(
-                        "guestfill_ocr.ocr.tesseract_engine.time.sleep"
-                    ):
+                with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 2):
+                    with patch("guestfill_ocr.ocr.tesseract_engine.time.sleep"):
                         with patch(
                             "guestfill_ocr.ocr.tesseract_engine.subprocess.run",
-                            side_effect=subprocess.TimeoutExpired(
-                                ["tesseract"], timeout=5
-                            ),
+                            side_effect=subprocess.TimeoutExpired(["tesseract"], timeout=5),
                         ):
                             from guestfill_ocr.ocr.tesseract_engine import (
                                 check_tesseract_available,
@@ -304,12 +252,8 @@ class TestCheckTesseractAvailableRetry:
 
         with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_CHECKED", False):
             with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_AVAILABLE", False):
-                with patch(
-                    "guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 3
-                ):
-                    with patch(
-                        "guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_BACKOFF", 1.0
-                    ):
+                with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_ATTEMPTS", 3):
+                    with patch("guestfill_ocr.ocr.tesseract_engine._TESSERACT_RETRY_BACKOFF", 1.0):
                         with patch(
                             "guestfill_ocr.ocr.tesseract_engine.time.sleep",
                             side_effect=capture_sleep,
@@ -327,6 +271,7 @@ class TestCheckTesseractAvailableRetry:
 
 
 # ── Response writer retry logic ───────────────────────────────────────
+
 
 class TestWriteResponseRetry:
     def test_succeeds_on_first_attempt(self, temp_dir: Path) -> None:
@@ -433,6 +378,7 @@ class TestWriteResponseRetry:
 
 
 # ── Main process_ocr_job error handling ───────────────────────────────
+
 
 class TestProcessOcrJobErrorHandling:
     def test_permission_error_returns_output_file_locked(self) -> None:

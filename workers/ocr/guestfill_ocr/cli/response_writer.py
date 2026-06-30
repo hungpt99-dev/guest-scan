@@ -24,7 +24,7 @@ def write_response(path: str, data: dict, max_retries: int = 3, retry_delay: flo
         except (OSError, PermissionError) as e:
             last_error = e
             if attempt < max_retries - 1:
-                time.sleep(retry_delay * (2 ** attempt))
+                time.sleep(retry_delay * (2**attempt))
             continue
 
     raise OSError(f"Failed to write response after {max_retries} attempts: {last_error}") from last_error

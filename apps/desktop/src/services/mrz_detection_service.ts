@@ -48,8 +48,6 @@ export interface MrzDetectionService {
   detectMrzRegion(image: PreprocessedImage): Promise<MrzRegion>;
 }
 
-
-
 export type TextBand = {
   startY: number;
   endY: number;
@@ -450,7 +448,9 @@ class HeuristicMrzDetectionService implements MrzDetectionService {
   }
 
   private async saveCroppedImage(canvas: HTMLCanvasElement): Promise<string> {
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", JPEG_SAVE_QUALITY));
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/jpeg", JPEG_SAVE_QUALITY),
+    );
     if (!blob) {
       throw Object.assign(new Error("MRZ_DETECTION_FAILED"), {
         type: "MRZ_DETECTION_FAILED" as MrzDetectionError,

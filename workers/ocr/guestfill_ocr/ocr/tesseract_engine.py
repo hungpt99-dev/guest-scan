@@ -1,6 +1,8 @@
 """Tesseract OCR engine wrapper."""
 
 import logging
+import os
+import shutil
 import subprocess
 import time
 
@@ -16,6 +18,22 @@ logger = logging.getLogger("guestfill_ocr.tesseract_engine")
 
 MRZ_CONFIG = "-c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789< --psm 6"
 GENERIC_CONFIG = "--psm 3"
+
+# Resolve Tesseract binary path for macOS .app environments where PATH is minimal
+_TESSERACT_CANDIDATES = [
+    "tesseract",
+    "/opt/homebrew/bin/tesseract",
+    "/usr/local/bin/tesseract",
+    "/opt/local/bin/tesseract",
+]
+if pytesseract.pytesseract.tesseract_cmd and pytesseract.pytesseract.tesseract_cmd not in _TESSERACT_CANDIDATES:
+    _TESSERACT_CANDIDATES.insert(0, pytesseract.pytesseract.tesseract_cmd)
+
+for _tess in _TESSERACT_CANDIDATES:
+    _resolved = shutil.which(_tess) if "/" not in _tess else _tess if os.path.isfile(_tess) else None
+    if _resolved:
+        pytesseract.pytesseract.tesseract_cmd = _resolved
+        break
 
 _TESSERACT_CHECKED = False
 _TESSERACT_AVAILABLE = False

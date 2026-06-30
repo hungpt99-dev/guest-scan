@@ -120,8 +120,6 @@ function maskSensitiveValue(value: string, formField: string): string {
   return value.slice(0, 2) + "***" + value.slice(-1);
 }
 
-
-
 export function createAutoFillExecutionService(executor?: FillExecutor): AutoFillExecutionService {
   return new DefaultAutoFillExecutionService(executor ?? createDefaultFillExecutor());
 }

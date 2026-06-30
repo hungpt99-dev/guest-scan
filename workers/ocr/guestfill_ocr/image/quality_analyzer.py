@@ -159,11 +159,11 @@ def analyze_quality(gray: np.ndarray) -> dict:
         warnings.append("IMAGE_SKEWED")
     if glare > 0.15:
         warnings.append("GLARE_DETECTED")
-    if w < 800 or h < 600:
+    if w < 600 or h < 450:
         warnings.append("LOW_RESOLUTION")
-    if crease > 0.3:
+    if crease > 0.6:
         warnings.append("CREASE_DETECTED")
-    if wear > 0.4:
+    if wear > 0.5:
         warnings.append("WEAR_DETECTED")
     if edge_visibility < 0.3:
         warnings.append("EDGES_NOT_VISIBLE")

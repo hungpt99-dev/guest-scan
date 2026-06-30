@@ -82,11 +82,7 @@ export default function OcrScreen() {
     } catch (e) {
       console.error("OCR run error:", e);
       const errorMessage =
-        e instanceof Error
-          ? e.message
-          : typeof e === "object" && e !== null
-            ? JSON.stringify(e)
-            : String(e);
+        e instanceof Error ? e.message : typeof e === "object" && e !== null ? JSON.stringify(e) : String(e);
       setError(`Failed to run OCR: ${errorMessage}`);
     } finally {
       setProcessing(false);

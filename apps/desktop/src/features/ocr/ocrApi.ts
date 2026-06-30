@@ -24,9 +24,7 @@ class BrowserFileDialogProvider implements FileDialogProvider {
       input.multiple = true;
       input.accept = ACCEPTED_OCR_FILE_TYPES;
       input.onchange = () => {
-        const files = Array.from(input.files || []).map((f) =>
-          "path" in f ? (f as any).path : f.name
-        );
+        const files = Array.from(input.files || []).map((f) => ("path" in f ? (f as any).path : f.name));
         resolve(files);
       };
       input.onerror = () => reject(new Error("File selection was cancelled or failed."));
@@ -42,11 +40,7 @@ class BrowserFileDialogProvider implements FileDialogProvider {
       input.setAttribute("directory", "");
       input.onchange = () => {
         const files = Array.from(input.files || []);
-        resolve(
-          files.length > 0 && files[0]
-            ? files[0].webkitRelativePath.split("/")[0] || "selected_folder"
-            : null
-        );
+        resolve(files.length > 0 && files[0] ? files[0].webkitRelativePath.split("/")[0] || "selected_folder" : null);
       };
       input.onerror = () => reject(new Error("Folder selection was cancelled or failed."));
       input.click();
@@ -122,10 +116,7 @@ function createFileDialogProvider(): FileDialogProvider {
   if (!isTauri()) {
     return new BrowserFileDialogProvider();
   }
-  return new FallbackFileDialogProvider(
-    new TauriFileDialogProvider(),
-    new BrowserFileDialogProvider(),
-  );
+  return new FallbackFileDialogProvider(new TauriFileDialogProvider(), new BrowserFileDialogProvider());
 }
 
 const fileDialog = createFileDialogProvider();
@@ -144,7 +135,8 @@ export async function runOcr(request: OcrRequest): Promise<OcrJobResult> {
             documentMode: request.options.documentMode || "auto",
             maxImageWidth: request.options.maxImageWidth || DEFAULT_MAX_IMAGE_WIDTH,
             perImageTimeoutSeconds: request.options.perImageTimeoutSeconds || DEFAULT_PER_IMAGE_TIMEOUT_SECONDS,
-            perCandidateTimeoutSeconds: request.options.perCandidateTimeoutSeconds || DEFAULT_PER_CANDIDATE_TIMEOUT_SECONDS,
+            perCandidateTimeoutSeconds:
+              request.options.perCandidateTimeoutSeconds || DEFAULT_PER_CANDIDATE_TIMEOUT_SECONDS,
             enablePassportMrz: request.options.enablePassportMrz ?? true,
             enablePassportVisualOcr: request.options.enablePassportVisualOcr ?? true,
             enableIdCardOcr: request.options.enableIdCardOcr ?? true,
