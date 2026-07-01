@@ -6,6 +6,7 @@ import { createFieldNormalizationService } from "../../services/field_normalizat
 import { createOcrConfidenceService } from "../../services/ocr_confidence_service";
 import { createConfidenceScoringService } from "../../services/confidence-scoring-service";
 import type { OcrTextResult } from "../../ocr/ocr_engine";
+import type { ImageQualityResult } from "../../services/image_quality_service";
 
 function makeGoodOcrResult(overrides: Partial<OcrTextResult> = {}): OcrTextResult {
   return {
@@ -19,7 +20,7 @@ function makeGoodOcrResult(overrides: Partial<OcrTextResult> = {}): OcrTextResul
   };
 }
 
-function makeQualityResult(overrides: Record<string, unknown> = {}) {
+function makeQualityResult(overrides: Partial<ImageQualityResult> = {}): ImageQualityResult {
   return {
     metrics: {
       blurScore: 85,
@@ -30,9 +31,14 @@ function makeQualityResult(overrides: Record<string, unknown> = {}) {
       width: 1200,
       height: 900,
       edgeVisibilityScore: 0.85,
+      overexposureRatio: 0,
+      mrzCutoffScore: 1,
+      creaseScore: 0,
     },
     warnings: [],
+    ocrWarnings: [],
     passed: true,
+    status: "PASSED",
     ...overrides,
   };
 }

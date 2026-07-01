@@ -66,9 +66,14 @@ function makeQualityResult(overrides: Partial<ImageQualityResult> = {}): ImageQu
       width: 1200,
       height: 900,
       edgeVisibilityScore: 0.85,
+      overexposureRatio: 0,
+      mrzCutoffScore: 1,
+      creaseScore: 0,
     },
     warnings: [],
+    ocrWarnings: [],
     passed: true,
+    status: "PASSED",
     ...overrides,
   };
 }
@@ -141,6 +146,9 @@ describe("ConfidenceScoringService", () => {
           width: 1200,
           height: 900,
           edgeVisibilityScore: 0.85,
+          overexposureRatio: 0,
+          mrzCutoffScore: 1,
+          creaseScore: 0,
         },
       });
       const result = service.calculateFieldScores(fields, ocrResult, quality);
@@ -164,6 +172,9 @@ describe("ConfidenceScoringService", () => {
           width: 600,
           height: 400,
           edgeVisibilityScore: 0.85,
+          overexposureRatio: 0,
+          mrzCutoffScore: 1,
+          creaseScore: 0,
         },
       });
       const result = service.calculateFieldScores(fields, ocrResult, quality);
@@ -214,6 +225,9 @@ describe("ConfidenceScoringService", () => {
           width: 1200,
           height: 900,
           edgeVisibilityScore: 0.85,
+          overexposureRatio: 0,
+          mrzCutoffScore: 1,
+          creaseScore: 0,
         },
       });
       const result = service.calculateFieldScores(fields, ocrResult, quality);
@@ -238,6 +252,9 @@ describe("ConfidenceScoringService", () => {
           width: 1200,
           height: 900,
           edgeVisibilityScore: 0.85,
+          overexposureRatio: 0,
+          mrzCutoffScore: 1,
+          creaseScore: 0,
         },
       });
       const result = service.calculateFieldScores(fields, ocrResult, quality);

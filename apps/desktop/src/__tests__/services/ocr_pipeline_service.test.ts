@@ -231,8 +231,13 @@ describe("OcrPipelineService", () => {
         width: 1200,
         height: 900,
         edgeVisibilityScore: 0.85,
+        overexposureRatio: 0,
+        mrzCutoffScore: 1,
+        creaseScore: 0,
       },
       warnings: [],
+      ocrWarnings: [],
+      status: "PASSED",
     } as ImageQualityResult);
 
     vi.mocked(mocks.documentCrop.cropDocument).mockResolvedValue({
@@ -339,8 +344,13 @@ describe("OcrPipelineService", () => {
         width: 1200,
         height: 900,
         edgeVisibilityScore: 0.85,
+        overexposureRatio: 0,
+        mrzCutoffScore: 1,
+        creaseScore: 0,
       },
       warnings: ["BLURRY"],
+      ocrWarnings: ["BLUR_DETECTED"],
+      status: "NEED_REVIEW",
     } as ImageQualityResult);
 
     const service = createOcrPipelineService(
@@ -376,8 +386,13 @@ describe("OcrPipelineService", () => {
         width: 1200,
         height: 900,
         edgeVisibilityScore: 0.85,
+        overexposureRatio: 0,
+        mrzCutoffScore: 1,
+        creaseScore: 0,
       },
       warnings: [],
+      ocrWarnings: [],
+      status: "PASSED",
     } as ImageQualityResult);
 
     vi.mocked(mocks.documentCrop.cropDocument).mockResolvedValue({
@@ -486,8 +501,13 @@ describe("OcrPipelineService", () => {
         width: 1200,
         height: 900,
         edgeVisibilityScore: 0.85,
+        overexposureRatio: 0,
+        mrzCutoffScore: 1,
+        creaseScore: 0,
       },
       warnings: [],
+      ocrWarnings: [],
+      status: "PASSED",
     } as ImageQualityResult);
 
     vi.mocked(mocks.documentCrop.cropDocument).mockResolvedValue({
@@ -553,8 +573,13 @@ describe("OcrPipelineService", () => {
         width: 1200,
         height: 900,
         edgeVisibilityScore: 0.85,
+        overexposureRatio: 0,
+        mrzCutoffScore: 1,
+        creaseScore: 0,
       },
       warnings: [],
+      ocrWarnings: [],
+      status: "PASSED",
     } as ImageQualityResult);
 
     vi.mocked(mocks.documentCrop.cropDocument).mockResolvedValue({
@@ -621,8 +646,13 @@ describe("OcrPipelineService", () => {
         width: 1200,
         height: 900,
         edgeVisibilityScore: 0.85,
+        overexposureRatio: 0,
+        mrzCutoffScore: 1,
+        creaseScore: 0,
       },
       warnings: [],
+      ocrWarnings: [],
+      status: "PASSED",
     } as ImageQualityResult);
 
     vi.mocked(mocks.documentCrop.cropDocument).mockResolvedValue({
@@ -696,8 +726,13 @@ describe("OcrPipelineService", () => {
         width: 1200,
         height: 900,
         edgeVisibilityScore: 0.85,
+        overexposureRatio: 0,
+        mrzCutoffScore: 1,
+        creaseScore: 0,
       },
       warnings: [],
+      ocrWarnings: [],
+      status: "PASSED",
     } as ImageQualityResult);
 
     vi.mocked(mocks.documentCrop.cropDocument).mockRejectedValue(
@@ -738,8 +773,13 @@ describe("OcrPipelineService", () => {
         width: 1200,
         height: 900,
         edgeVisibilityScore: 0.85,
+        overexposureRatio: 0,
+        mrzCutoffScore: 1,
+        creaseScore: 0,
       },
       warnings: [],
+      ocrWarnings: [],
+      status: "PASSED",
     } as ImageQualityResult);
 
     vi.mocked(mocks.documentCrop.cropDocument).mockResolvedValue({
@@ -845,8 +885,13 @@ describe("OcrPipelineService", () => {
         width: 1200,
         height: 900,
         edgeVisibilityScore: 0.85,
+        overexposureRatio: 0,
+        mrzCutoffScore: 1,
+        creaseScore: 0,
       },
       warnings: [],
+      ocrWarnings: [],
+      status: "PASSED",
     } as ImageQualityResult);
 
     vi.mocked(mocks.documentCrop.cropDocument).mockResolvedValue({

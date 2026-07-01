@@ -39,16 +39,55 @@ export type FieldConfidenceScores = {
   mrzRaw: FieldConfidenceScore;
 };
 
+export type OverallConfidenceLevel = "HIGH" | "MEDIUM" | "LOW" | "FAILED";
+
+export type OverallConfidence = {
+  overallScore: number;
+  overallLevel: OverallConfidenceLevel;
+  fieldCount: number;
+  validFieldCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  failedCount: number;
+};
+
+const IMPORTANT_FIELDS: (keyof FieldConfidenceScores)[] = [
+  "passportNumber",
+  "fullName",
+  "dateOfBirth",
+  "gender",
+  "nationality",
+  "expiryDate",
+  "issuingCountry",
+];
+
 export interface OcrConfidenceService {
   calculateConfidence(
     fields: NormalizedFields,
     rawOcrResult: OcrTextResult,
     checkDigits?: Record<string, boolean>,
   ): FieldConfidenceScores;
+
+  calculateOverallConfidence(
+    fieldScores: FieldConfidenceScores,
+    importantFields?: (keyof FieldConfidenceScores)[],
+  ): OverallConfidence;
 }
 
 const HIGH_THRESHOLD = HIGH_CONFIDENCE_THRESHOLD;
 const MEDIUM_THRESHOLD = MEDIUM_CONFIDENCE_THRESHOLD;
+const LOW_THRESHOLD = 0.2;
+
+const FIELD_WEIGHTS: Partial<Record<keyof FieldConfidenceScores, number>> = {
+  passportNumber: 1.5,
+  fullName: 1.5,
+  dateOfBirth: 1.0,
+  gender: 0.8,
+  nationality: 1.0,
+  expiryDate: 1.0,
+  issuingCountry: 0.8,
+};
 
 const ISO3_COUNTRIES = new Set<string>([
   "ABW",
@@ -314,6 +353,13 @@ function scoreToLevel(score: number): ConfidenceLevel {
   return "LOW";
 }
 
+function overallScoreToLevel(score: number): OverallConfidenceLevel {
+  if (score >= HIGH_THRESHOLD) return "HIGH";
+  if (score >= MEDIUM_THRESHOLD) return "MEDIUM";
+  if (score >= LOW_THRESHOLD) return "LOW";
+  return "FAILED";
+}
+
 function isValidDate(value: string): boolean {
   if (!DATE_REGEX.test(value)) return false;
   const date = new Date(value + "T00:00:00Z");
@@ -485,6 +531,66 @@ class DefaultOcrConfidenceService implements OcrConfidenceService {
       expiryDate: { ...expiryDateScore, level: scoreToLevel(expiryDateScore.score) },
       issuingCountry: { ...issuingCountryScore, level: scoreToLevel(issuingCountryScore.score) },
       mrzRaw: { score: mrzRawScoreValue, level: scoreToLevel(mrzRawScoreValue), issues: mrzRawIssues },
+    };
+  }
+
+  calculateOverallConfidence(
+    fieldScores: FieldConfidenceScores,
+    importantFields?: (keyof FieldConfidenceScores)[],
+  ): OverallConfidence {
+    const fields = importantFields ?? IMPORTANT_FIELDS;
+
+    let totalWeight = 0;
+    let weightedSum = 0;
+    let fieldCount = 0;
+    let validFieldCount = 0;
+    let highCount = 0;
+    let mediumCount = 0;
+    let lowCount = 0;
+    let failedCount = 0;
+
+    for (const fieldName of fields) {
+      const fs = fieldScores[fieldName];
+      if (!fs) continue;
+      fieldCount++;
+      const weight = FIELD_WEIGHTS[fieldName] ?? 1.0;
+      totalWeight += weight;
+      weightedSum += fs.score * weight;
+
+      if (fs.level === "HIGH") highCount++;
+      else if (fs.level === "MEDIUM") mediumCount++;
+      else if (fs.level === "LOW") lowCount++;
+      else failedCount++;
+
+      if (fs.score >= MEDIUM_THRESHOLD && fs.issues.length === 0) {
+        validFieldCount++;
+      }
+    }
+
+    const overallScore = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) / 100 : 0;
+
+    const overallLevel = overallScoreToLevel(overallScore);
+
+    logger.debug("OcrConfidenceService: overall confidence calculated", {
+      overallScore,
+      overallLevel,
+      fieldCount,
+      validFieldCount,
+      highCount,
+      mediumCount,
+      lowCount,
+      failedCount,
+    });
+
+    return {
+      overallScore,
+      overallLevel,
+      fieldCount,
+      validFieldCount,
+      highCount,
+      mediumCount,
+      lowCount,
+      failedCount,
     };
   }
 }
