@@ -6,7 +6,8 @@ mod error;
 
 use app_state::AppState;
 use commands::{
-    clipboard_commands, excel_commands, file_commands, ocr_commands, settings_commands,
+    auto_fill_commands, clipboard_commands, excel_commands, file_commands, ocr_commands,
+    settings_commands,
 };
 
 fn main() {
@@ -28,6 +29,9 @@ fn main() {
             clipboard_commands::copy_to_clipboard,
             settings_commands::load_settings,
             settings_commands::save_settings,
+            auto_fill_commands::focus_app_window,
+            auto_fill_commands::fill_desktop_field,
+            auto_fill_commands::fill_web_field,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to run GuestFill");
