@@ -4,7 +4,10 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import "../styles/index.css";
 import { APP_VERSION } from "../config/version";
+import { initializeConfig } from "../config";
 import { addLog } from "../services/loggingService";
+
+initializeConfig();
 
 addLog(`App started, version ${APP_VERSION}`);
 

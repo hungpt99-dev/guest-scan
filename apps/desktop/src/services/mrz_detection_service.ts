@@ -1,4 +1,5 @@
-import { isTauri, requireTauri } from "../lib/isTauri";
+import { isTauri } from "../lib/isTauri";
+import { invokeIpc } from "../infra/ipc";
 import { logger } from "../lib/logger";
 import type { PreprocessedImage } from "./image_preprocessing_service";
 import {
@@ -294,16 +295,12 @@ export function createMrzDetectionService(): MrzDetectionService {
 
 class TauriMrzDetectionService implements MrzDetectionService {
   async detectMrzRegion(image: PreprocessedImage): Promise<MrzRegion> {
-    await requireTauri();
-
     logger.debug("TauriMrzDetectionService: detecting MRZ region", {
       imagePath: image.imagePath,
     });
 
     try {
-      const { invoke } = await import("@tauri-apps/api/tauri");
-
-      const raw = await invoke<{
+      const raw = await invokeIpc<{
         croppedPath: string;
         width: number;
         height: number;

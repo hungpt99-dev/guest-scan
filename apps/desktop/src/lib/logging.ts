@@ -60,6 +60,14 @@ const SENSITIVE_PATTERNS: SensitivePattern[] = [
     test: (k) => /dateOfBirth|dob|birthDate|expiryDate|expiry|issueDate/i.test(k),
     mask: (v) => (v.length > 4 ? v.slice(0, 4) + "****" : v),
   },
+  {
+    test: (k) => /api[_.]?key|api[_.]?secret|secret|token|refreshToken|accessToken/i.test(k),
+    mask: (v) => (v.length > 8 ? v.slice(0, 4) + "****" + v.slice(-4) : "****"),
+  },
+  {
+    test: (k) => /authorization|authheader|password|passwd/i.test(k),
+    mask: () => "[REDACTED]",
+  },
 ];
 
 function maskContextValue(key: string, value: unknown, config: LoggerConfig): unknown {

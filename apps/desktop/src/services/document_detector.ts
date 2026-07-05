@@ -1,4 +1,5 @@
-import { isTauri, requireTauri } from "../lib/isTauri";
+import { isTauri } from "../lib/isTauri";
+import { invokeIpc } from "../infra/ipc";
 import { logger } from "../lib/logger";
 import type { ImageInput } from "./image_quality_service";
 import { JPEG_SAVE_QUALITY, MOCK_CROP_DELAY_MS } from "../config/constants";
@@ -58,16 +59,12 @@ export function createDocumentDetectorService(): DocumentDetectorService {
 
 class TauriDocumentDetectorService implements DocumentDetectorService {
   async detectAndCorrect(input: ImageInput): Promise<DocumentCorrectionResult> {
-    await requireTauri();
-
     logger.debug("DocumentDetectorService (Tauri): detecting and correcting document", {
       imagePath: input.imagePath,
     });
 
     try {
-      const { invoke } = await import("@tauri-apps/api/tauri");
-
-      const raw = await invoke<{
+      const raw = await invokeIpc<{
         correctedPath: string;
         originalPath: string;
         detected: boolean;

@@ -1,4 +1,5 @@
-import { isTauri, requireTauri } from "../lib/isTauri";
+import { isTauri } from "../lib/isTauri";
+import { invokeIpc } from "../infra/ipc";
 import { logger } from "../lib/logger";
 import type { ImageInput } from "./image_quality_service";
 
@@ -27,14 +28,10 @@ export function createDocumentCropService(): DocumentCropService {
 
 class TauriDocumentCropService implements DocumentCropService {
   async cropDocument(input: ImageInput): Promise<CroppedImage> {
-    await requireTauri();
-
     logger.debug("DocumentCropService: cropping document", { imagePath: input.imagePath });
 
     try {
-      const { invoke } = await import("@tauri-apps/api/tauri");
-
-      const raw = await invoke<{
+      const raw = await invokeIpc<{
         croppedPath: string;
         width: number;
         height: number;

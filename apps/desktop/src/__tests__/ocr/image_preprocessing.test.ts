@@ -81,6 +81,7 @@ function createGlareImage(width: number, height: number, glareRatio: number): Im
   });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockCanvasInstance: any;
 
 function createMockCanvas(width = 100, height = 100) {
@@ -109,12 +110,14 @@ function createMockCanvas(width = 100, height = 100) {
 beforeAll(() => {
   if (typeof document === "undefined") {
     mockCanvasInstance = createMockCanvas();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).document = {
       createElement: vi.fn((tag: string) => {
         if (tag === "canvas") return mockCanvasInstance;
         return {};
       }),
     };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).HTMLImageElement = class {
       crossOrigin: string = "";
       src: string = "";
@@ -123,9 +126,12 @@ beforeAll(() => {
       onload?: () => void;
       onerror?: () => void;
     };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).HTMLCanvasElement = class {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).HTMLVideoElement = class {};
-    (globalThis as any).Image = class extends (globalThis as any).HTMLImageElement {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).Image = class {
       crossOrigin: string = "";
       src: string = "";
       naturalWidth: number = 100;
@@ -133,6 +139,7 @@ beforeAll(() => {
       onload?: () => void;
       onerror?: () => void;
     };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).ImageData = ImageDataMock;
   }
 });

@@ -1,5 +1,17 @@
 export type { GuestStatus, DocumentType, Gender, ConfidenceLevel, GuestRow } from "./guest";
-export type { OcrJobStatus, OcrSummary, OcrJobResult } from "./ocr";
+export type {
+  OcrJobStatus,
+  OcrSummary,
+  OcrJobResult,
+  OcrProviderType,
+  ExtractedField,
+  ExtractedFields,
+  OcrProcessingStatus,
+  OcrWarningCode,
+  OcrResult,
+  OcrProvider,
+  OcrProcessingOptions,
+} from "./ocr";
 export type { ExcelColumn, ExcelExportOptions, ExcelImportResult } from "./excel";
 export type { FillAction, FillTarget, FillHistoryEntry, FillStatus, FillState } from "./fill";
 export type { AppError } from "./error";

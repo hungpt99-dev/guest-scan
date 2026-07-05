@@ -1,4 +1,5 @@
 import { logger } from "../lib/logger";
+import { invokeIpc } from "../infra/ipc";
 
 export type OcrUseCase = "MRZ" | "VISUAL" | "FALLBACK";
 
@@ -350,8 +351,7 @@ class PaddleOcrProvider implements OcrProvider {
     this.available = false;
 
     try {
-      const { invoke } = await import("@tauri-apps/api/tauri");
-      this.available = await invoke<boolean>("check_paddleocr_available");
+      this.available = await invokeIpc<boolean>("check_paddleocr_available");
       logger.info("PaddleOcrProvider: initialized", { available: this.available });
     } catch (error) {
       logger.warn("PaddleOcrProvider: initialization failed", error);
@@ -373,8 +373,7 @@ class PaddleOcrProvider implements OcrProvider {
     _useCase: OcrUseCase,
     _settings: MrzOcrSettings,
   ): Promise<OcrProviderResult> {
-    const { invoke } = await import("@tauri-apps/api/tauri");
-    const raw = await invoke<PaddleInvokeResult>("extract_paddleocr_mrz", {
+    const raw = await invokeIpc<PaddleInvokeResult>("extract_paddleocr_mrz", {
       imagePath,
       useOrientation: true,
     });
@@ -404,8 +403,7 @@ class PaddleOcrProvider implements OcrProvider {
     zone: VisualFieldZone,
     _settings: VisualOcrSettings,
   ): Promise<OcrProviderResult> {
-    const { invoke } = await import("@tauri-apps/api/tauri");
-    const raw = await invoke<PaddleInvokeResult>("extract_paddleocr_zone", {
+    const raw = await invokeIpc<PaddleInvokeResult>("extract_paddleocr_zone", {
       imagePath,
       x: zone.x,
       y: zone.y,
@@ -435,8 +433,7 @@ class PaddleOcrProvider implements OcrProvider {
   }
 
   private async invokePaddleOcrGeneral(imagePath: string, settings: OcrProviderSettings): Promise<OcrProviderResult> {
-    const { invoke } = await import("@tauri-apps/api/tauri");
-    const raw = await invoke<PaddleInvokeResult>("extract_paddleocr_general", {
+    const raw = await invokeIpc<PaddleInvokeResult>("extract_paddleocr_general", {
       imagePath,
       useOrientation: settings.useOrientationClassification,
       useDocumentCorrection: settings.useDocumentCorrection,

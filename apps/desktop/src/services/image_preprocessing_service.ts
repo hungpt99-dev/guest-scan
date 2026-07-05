@@ -1,4 +1,5 @@
-import { isTauri, requireTauri } from "../lib/isTauri";
+import { isTauri } from "../lib/isTauri";
+import { invokeIpc } from "../infra/ipc";
 import { logger } from "../lib/logger";
 import type { CroppedImage } from "./document_crop_service";
 
@@ -88,8 +89,6 @@ function resolveOptions(
 
 class TauriImagePreprocessingService implements ImagePreprocessingService {
   async preprocessImage(image: CroppedImage, options?: PreprocessingOptions): Promise<PreprocessedImage> {
-    await requireTauri();
-
     const resolved = resolveOptions(options);
     logger.debug("ImagePreprocessingService: preprocessing image", {
       imagePath: image.imagePath,
@@ -97,9 +96,7 @@ class TauriImagePreprocessingService implements ImagePreprocessingService {
     });
 
     try {
-      const { invoke } = await import("@tauri-apps/api/tauri");
-
-      const raw = await invoke<{
+      const raw = await invokeIpc<{
         preprocessedPath: string;
         width: number;
         height: number;

@@ -2,6 +2,49 @@
 
 All notable changes to GuestFill are documented in this file.
 
+## [0.5.0] - 2026-07-05
+
+### Added
+
+- **Dual OCR provider architecture (Local OCR + Azure OCR):**
+  - `OcrController` — orchestrates OCR processing with provider abstraction, status tracking, and data mapping
+  - `LocalOCRProvider` — free/offline OCR using Tesseract.js with MRZ parsing and visual field extraction
+  - `AzureOCRProvider` — production OCR using Azure Document Intelligence for structured passport/ID extraction
+  - `OCRProviderSelector` — UI component for choosing between Local and Azure OCR at runtime
+- **Comprehensive OCR E2E test suite (771 lines):**
+  - `tests/e2e/ocr-feature.test.ts` — provider selection, Local/Azure flows, provider switching, data review/correction, privacy safeguards, edge cases (expired documents, low confidence, ID cards)
+- **OCR Privacy and Security:**
+  - `docs/ocr-privacy.md` — data handling policies, logging restrictions, API key security
+  - `OcrController.clearExtractedData()` — clears all OCR data and temp files on demand
+  - `OcrController.sanitizeLogContext()` — redacts sensitive fields (passport numbers, names, DOB) from logs
+  - `maskPassportNumber()` and `maskFullName()` — utilities for masking sensitive data in logs and UI
+- **Field-level confidence scoring** — each extracted field carries a confidence score; low-confidence fields trigger warnings
+- **Document expiry detection** — warns when documents are expired or expiring within 3 months
+- **MRZ parsing and validation** — full TD1/TD3 MRZ support with check digit validation
+- **Retry and cancellation** — users can retry OCR or cancel in-progress processing via AbortSignal
+- **`OCRProviderSelector`** component with processing status display, error messages, and retry button
+
+### Changed
+
+- `packages/shared/src/types/ocr.ts` — added `OcrProviderType`, `ExtractedField`, `ExtractedFields`, `OcrResult`, `OcrProvider` interface, `OcrWarningCode`, `OcrProcessingOptions`
+- `apps/desktop/src/features/ocr/` — added `ocrTypes.ts`, `ocrConstants.ts`, `ocrStore.ts`, `ocrApi.ts`
+- `apps/desktop/src/services/ocr_provider.ts` — expanded with full provider abstraction, PaddleOCR integration, Tesseract fallback
+- `apps/desktop/src/services/ocr_pipeline_service.ts` — 11-stage pipeline from quality check to staff review
+- `apps/desktop/src/services/ocr_confidence_service.ts` — per-field confidence scoring with check digit, date, country, and document type validation
+- `apps/desktop/src/services/ocr_warning_service.ts` — 18 warning codes with severity and categorization
+- `apps/desktop/src/services/mrz_ocr_service.ts` — MRZ variant-based OCR with multi-engine fallback and validation scoring
+- `apps/desktop/src/services/visual_ocr_service.ts` — visual zone OCR with field conflict resolution between MRZ and visual data
+- `apps/desktop/src/ocr/` — engine wrappers for PaddleOCR, Tesseract.js, EasyOCR, and OcrEngineManager with multi-pass fallback
+- `apps/desktop/src-tauri/src/commands/ocr_commands.rs` — Rust OCR command with Python worker orchestration
+- `.env.example` — added `GUESTFILL_ENABLE_ONLINE_OCR` and `GUESTFILL_LOCAL_BRIDGE_PORT` variables
+
+### Security
+
+- Azure API keys are never exposed to frontend code — stored in Rust backend only
+- Document images are temporary — cleaned up immediately after processing
+- Sensitive fields redacted from all log output via key-name pattern matching
+- Users must review and confirm extracted data before saving
+
 ## [0.4.0] - 2026-06-28
 
 ### Added

@@ -1,387 +1,695 @@
-# Static Analysis Report — Refactoring & Bug Fixing
+# Guest Fill App — Comprehensive Refactor Analysis Report
 
-> Generated: 2026-06-30 | Scope: Full codebase (TypeScript + Python + Rust)
+> **Generated:** 2026-07-05 | **Scope:** Full codebase (TypeScript + Python + Rust) | **Status:** Complete
 
 ---
 
 ## Table of Contents
 
-1. [Bugs & Logic Errors](#1-bugs--logic-errors)
-2. [Hardcoded Values](#2-hardcoded-values)
-3. [Anti-Patterns & Code Smells](#3-anti-patterns--code-smells)
-4. [Maintainability Issues](#4-maintainability-issues)
-5. [Design Pattern Suggestions](#5-design-pattern-suggestions)
+1. [Executive Summary](#1-executive-summary)
+2. [Architecture Overview & Patterns](#2-architecture-overview--patterns)
+3. [Critical Architecture Issues](#3-critical-architecture-issues)
+4. [Frontend Issues: Screens & Components](#4-frontend-issues-screens--components)
+5. [Services Layer Issues](#5-services-layer-issues)
+6. [OCR Module Issues](#6-ocr-module-issues)
+7. [State Management Issues](#7-state-management-issues)
+8. [Tauri Rust Backend Issues](#8-tauri-rust-backend-issues)
+9. [Shared Package Issues](#9-shared-package-issues)
+10. [Python OCR Worker Issues](#10-python-ocr-worker-issues)
+11. [Configuration & Environment Issues](#11-configuration--environment-issues)
+12. [Security & Privacy Issues](#12-security--privacy-issues)
+13. [Test Coverage Analysis](#13-test-coverage-analysis)
+14. [Prioritized Refactor Recommendations](#14-prioritized-refactor-recommendations)
+15. [Migration Strategy](#15-migration-strategy)
 
 ---
 
-## 1. Bugs & Logic Errors
+## 1. Executive Summary
 
-### 1.1 `captureFromDevice` always throws — dead code path
+### Codebase at a Glance
 
-**File:** `apps/desktop/src/api/ocr_api.ts:278`
+| Metric                      | Value                    |
+| --------------------------- | ------------------------ |
+| Total source files          | ~300+                    |
+| Total lines of code         | ~68,186                  |
+| TypeScript source (desktop) | ~40,791 lines (99 files) |
+| Python OCR worker           | ~6,619 lines (60 files)  |
+| Rust backend                | ~639 lines (10 files)    |
+| Shared package              | ~488 lines (15 files)    |
+| Test files                  | 102 (across TS + Python) |
+| Documentation               | 24 markdown files        |
 
-- `captureFromDevice(_source?)` unconditionally throws `new Error("Camera capture not implemented in API layer.")`. Every call to `captureImage()` with a non-file source hits this and returns an error.
-- **Fix:** Remove the method or implement actual camera integration.
+### Architecture
 
-### 1.2 TD1 check-digit validation always passes for optional data
+Guest Fill is a **local-first desktop application** built as a **pnpm monorepo** with three language ecosystems:
 
-**File:** `workers/ocr/guestfill_ocr/passport/mrz_validator.py:137-138`
+- **Desktop app:** Tauri v1 + React 18 + TypeScript + Vite + Tailwind CSS
+- **Python OCR worker:** PaddleOCR/Tesseract with a JSON-file IPC bridge
+- **Rust backend:** Tauri commands orchestrated through `invoke()`
 
-```python
-optional_cd = None
-```
+### Key Findings by Severity
 
-Then used at line 152:
-
-```python
-results["optional_data_valid"] = optional_cd is None or validate_check_digit(...)
-```
-
-Since `optional_cd` is always `None`, the first clause short-circuits to `True` — **optional data check digits are never validated for TD1**, potentially accepting corrupted ID data.
-
-### 1.3 TD2 `final_composite_valid` uses incorrect logic
-
-**File:** `workers/ocr/guestfill_ocr/passport/mrz_validator.py:215-217`
-
-```python
-results["final_composite_valid"] = results["passport_number_valid"] or not any(
-    e.startswith("PASSPORT") for e in results["errors"]
-)
-```
-
-This sets `final_composite_valid` to `True` whenever either the passport number check passes OR no PASSPORT-related error exists — but the composite check digit is separate from the passport number check digit. This is **not ICAO-compliant**.
-
-### 1.4 Overlapping name-gender entries cause ambiguous results
-
-**File:** `apps/desktop/src/features/fill/safetyEngine.ts:441,548`
-
-- `"maria"` appears in both `MASCULINE_NAMES` (line 441) and `FEMININE_NAMES` (line 516).
-- `"van"` appears in both sets (lines 443 and 548).
-- `guessNameGender()` checks masculine first, so `"Maria"` will always match as male — **incorrect**.
-
-### 1.5 IndexedDB connection exhaustion — no connection pooling
-
-**File:** `apps/desktop/src/lib/db.ts:4`
-
-- `openDb()` opens a **new IndexedDB connection on every CRUD call**. Multiple rapid operations can exhaust browser connection limits (~per-origin connection cap).
-- **Fix:** Implement a singleton connection manager.
-
-### 1.6 `maskSensitiveMetadata` only checks a subset of sensitive keys
-
-**File:** `apps/desktop/src/api/ocr_api.ts:283-292`
-
-- Only 8 keys are listed for masking, while `audit-log-service.ts:57-73` lists 14 patterns. Inconsistent masking coverage means some sensitive data may leak to logs.
-
-### 1.7 Unsafe type cast in Excel import hashing
-
-**File:** `apps/desktop/src/features/excel/excelImport.ts:141`
-
-```typescript
-const hashBuffer = await window.crypto.subtle.digest("SHA-256", data as unknown as ArrayBuffer);
-```
-
-Uses `as unknown as ArrayBuffer` — a double cast that bypasses type safety. If `data` is not structurally compatible with `ArrayBuffer`, the digest silently produces incorrect results.
-
-### 1.8 `describePassportPattern` ignores its parameter
-
-**File:** `apps/desktop/src/features/fill/safetyEngine.ts:326-328`
-
-```typescript
-function describePassportPattern(iso3: string, _pattern?: RegExp): string | undefined {
-  return PASSPORT_FORMAT_EXAMPLES[iso3];
-}
-```
-
-The `_pattern` parameter is accepted but never used. If a country has multiple patterns, the description doesn't reflect which one failed.
-
-### 1.9 Mock MRZ detection returns hardcoded width
-
-**File:** `apps/desktop/src/services/mrz_detection_service.ts:463`
-
-```typescript
-return createMrzRegion(image.imagePath, 400, bandHeight, y, formatInfo);
-```
-
-Always reports width as `400` regardless of actual image dimensions — will break downstream processing that relies on bounding box accuracy.
-
-### 1.10 Pipeline throws error objects without proper error types
-
-**File:** `apps/desktop/src/services/ocr_pipeline_service.ts:127-128`
-
-```typescript
-throw Object.assign(new Error(`Image quality check failed: ...`), {
-  type: qualityResult.warnings[0] === "BLURRY" ? "BLURRY_IMAGE" : ("GLARE_REFLECTION" as OcrPipelineError),
-});
-```
-
-Mutating Error objects with `Object.assign` is fragile — the `type` property is not part of `Error` prototype and may be lost during serialization.
-
-### 1.11 Filter logic discards empty string as unmapped
-
-**File:** `apps/desktop/src/services/auto-fill-mapping-service.ts:353-356`
-
-```typescript
-const unmappedOcrFields = OCR_FIELD_KEYS.filter((k) => {
-  if (!fields[k as keyof NormalizedFields]) return false;
-  return !mappedOcrFields.has(k);
-});
-```
-
-`!fields[k]` filters out empty strings `""` as falsy, so fields with legitimate empty values are reported as unmapped.
-
-### 1.12 Visual OCR name filter may discard valid names
-
-**File:** `workers/ocr/guestfill_ocr/passport/passport_visual_ocr.py:131-141`
-
-```python
-if not p.isalpha():
-    continue
-if len(p) > 15:
-    continue
-distinct = len(set(p))
-if distinct < 3 and len(p) > 3:
-    continue
-```
-
-Names like "Nguyen" (6 chars, 4 distinct) pass, but short names like "Le" (2 chars) or "Ho" (5 chars, 3 distinct) that fail these heuristics would be silently discarded. Names with hyphens or apostrophes fail `isalpha()` and are skipped.
-
-### 1.13 `maskDetails` does not handle arrays of objects
-
-**File:** `apps/desktop/src/services/audit-log-service.ts:98-110`
-
-```typescript
-if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-  masked[key] = maskDetails(value as Record<string, unknown>);
-}
-```
-
-Nested objects inside arrays are never masked, potentially leaking sensitive data in array fields.
+| Severity     | Count | Categories                                                                       |
+| ------------ | ----- | -------------------------------------------------------------------------------- |
+| **Critical** | 7     | Data loss risk, dead code paths, security gaps, cross-language type drift        |
+| **High**     | 18    | Massive code duplication, mixed concerns, circular dependencies, untestable code |
+| **Medium**   | 25+   | Type safety erosion, naming chaos, configuration redundancy, stub commands       |
+| **Low**      | 30+   | Hardcoded strings, inline SVGs, parameter shadowing, missing docstrings          |
 
 ---
 
-## 2. Hardcoded Values
+## 2. Architecture Overview & Patterns
 
-### 2.1 Configuration / Threshold Constants
+### Current Architecture
 
-| File                                                       | Line(s) | Value                                                    | Description                         |
-| ---------------------------------------------------------- | ------- | -------------------------------------------------------- | ----------------------------------- |
-| `apps/desktop/src/services/ocr_pipeline_service.ts`        | 74      | `0.6`                                                    | `OCR_CONFIDENCE_THRESHOLD`          |
-| `apps/desktop/src/services/mrz_detection_service.ts`       | 32–38   | `0.65, 0.06, 0.35, 12, 0.12, 3, 0.2`                     | MRZ detection parameters (7 consts) |
-| `apps/desktop/src/services/ocr_confidence_service.ts`      | 38–47   | `0.85, 0.6, 0.1, 0.2, 0.2, 0.15, 0.05, 0.05, 0.25, 0.15` | Confidence scoring thresholds       |
-| `apps/desktop/src/services/auto-fill-execution-service.ts` | 122     | `100`                                                    | `DEFAULT_FIELD_DELAY_MS`            |
-| `apps/desktop/src/ocr/paddle_ocr_engine.ts`                | 8       | `0.6`                                                    | `DEFAULT_CONFIDENCE_THRESHOLD`      |
-| `apps/desktop/src/lib/db.ts`                               | 1–2     | `"guestfill"`, `2`                                       | `DB_NAME`, `DB_VERSION`             |
-| `apps/desktop/src/services/audit-log-service.ts`           | 50–53   | `90 days`, `10000`                                       | Retention config                    |
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Tauri Desktop App (Rust + React)                 │
+│                                                                     │
+│  screens/ ──▶ features/ ──▶ services/ ──▶ ocr/ ──▶ api/           │
+│     │             │              │            │        │            │
+│     │        ┌────┴────┐   ┌────┴────┐  ┌────┴────┐  │            │
+│     │        │ Stores  │   │ Engines │  │Utils/Svc│  │            │
+│     ▼        ▼         ▼   ▼         ▼  ▼         ▼  ▼             │
+│  UI ────▶ Zustand ──▶ Tauri invoke() ──▶ Python Worker (subprocess)│
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-### 2.2 Data Dictionaries / Lookup Tables
+### Positive Patterns Already Present
 
-| File                                                        | Lines   | Entries | Description                                 |
-| ----------------------------------------------------------- | ------- | ------- | ------------------------------------------- |
-| `apps/desktop/src/services/ocr_confidence_service.ts`       | 49–299  | ~250    | `ISO3_COUNTRIES` set                        |
-| `apps/desktop/src/features/fill/safetyEngine.ts`            | 36–93   | ~90     | `PASSPORT_PATTERNS` per-country regexes     |
-| `apps/desktop/src/features/fill/safetyEngine.ts`            | 95–112  | ~15     | `AMBIGUOUS_CHARS` map                       |
-| `apps/desktop/src/features/fill/safetyEngine.ts`            | 198–265 | ~67     | `ISO3_FROM_ISO2` mapping                    |
-| `apps/desktop/src/features/fill/safetyEngine.ts`            | 267–324 | ~67     | `PASSPORT_FORMAT_EXAMPLES`                  |
-| `apps/desktop/src/features/fill/safetyEngine.ts`            | 366–549 | ~185    | `MASCULINE_NAMES` + `FEMININE_NAMES`        |
-| `apps/desktop/src/features/excel/excelImport.ts`            | 159–184 | ~23     | Column name normalization map               |
-| `apps/desktop/src/services/auto-fill-mapping-service.ts`    | 23–55   | ~14     | `OCR_FIELD_KEYS`, `OCR_FIELD_LABELS`        |
-| `apps/desktop/src/features/fill/fillConstants.ts`           | 1–57    | ~25     | `FILL_FIELDS`, shortcuts, error codes       |
-| `apps/desktop/src/services/audit-log-service.ts`            | 57–73   | ~14     | `SENSITIVE_KEY_PATTERNS`                    |
-| `workers/ocr/guestfill_ocr/excel/columns.py`                | 1–47    | ~27     | `GUEST_COLUMNS`, `ERROR_COLUMNS`, etc.      |
-| `workers/ocr/guestfill_ocr/passport/mrz_repair.py`          | 8–19    | ~10     | `CHAR_REPAIR_MAP`                           |
-| `workers/ocr/guestfill_ocr/passport/passport_visual_ocr.py` | 23–68   | ~7      | `FIELD_PATTERNS` with 20+ language variants |
-| `workers/ocr/guestfill_ocr/ocr/ocr_selector.py`             | 325     | ~10     | Hardcoded language fallback list            |
-| `workers/ocr/guestfill_ocr/common/constants.py`             | —       | ~20     | Warning codes, status constants             |
+1. **Interface + Factory pattern** in services layer (e.g., `ConfidenceScoringService` interface + `createConfidenceScoringService()` factory)
+2. **Dependency injection through constructor parameters** (e.g., `DefaultOcrPipelineService` takes 11 dependencies)
+3. **Store abstraction** with IndexedDB and in-memory implementations
+4. **Result monad** in `lib/result.ts` (though largely unused)
+5. **Clean route separation** in `routes.tsx`
+6. **Comprehensive test infrastructure** with 102 test files
+7. **Lefthook quality gates** (format, lint, typecheck, secret scan pre-commit)
 
-### 2.3 UI Strings / Labels
+### Critical Architectural Problems
 
-| File                                               | Line(s)  | Description                                    |
-| -------------------------------------------------- | -------- | ---------------------------------------------- |
-| `apps/desktop/src/screens/FillAssistantScreen.tsx` | 40–56    | Color/score thresholds in 3 separate functions |
-| `apps/desktop/src/screens/FillAssistantScreen.tsx` | 96–97    | `"Loading guests..."`                          |
-| `apps/desktop/src/screens/FillAssistantScreen.tsx` | 101, 103 | `"Fill Assistant"`, `"No guest selected"`      |
-| `apps/desktop/src/screens/GuestListScreen.tsx`     | 101      | `"Guest List"`                                 |
-| `apps/desktop/src/screens/OcrScreen.tsx`           | —        | Various display strings                        |
-| `apps/desktop/src/screens/SettingsScreen.tsx`      | —        | Settings labels                                |
+#### C1. Circular Dependency Between `services/` and `ocr/`
+
+**Severity: CRITICAL**
+
+```
+services/ ──imports──▶ ocr/ (engines, utils)
+ocr/ ──imports──▶ services/ (pipeline, services via ocr_pipeline.ts)
+```
+
+- `ocr/ocr_pipeline.ts` imports 13 modules from `services/`
+- `services/` imports engines from `ocr/`
+- This creates a circular dependency that violates clean architecture principles
+
+**Impact:** Impossible to extract `ocr/` as a standalone module. Tests in either directory have implicit dependencies on the other.
+
+#### C2. Two Competing OCR Abstractions (OcrEngine vs OcrProvider × 2)
+
+**Severity: CRITICAL**
+
+Three separate OCR abstractions exist:
+
+1. **`OcrEngine` interface** in `ocr/ocr_engine.ts` — simple `extractText(input)` contract
+2. **`OcrProvider` interface** in `@guestfill/shared` — `processImage()`, `cancel()` contract
+3. **`OcrProvider` interface** in `services/ocr_provider.ts` — DIFFERENT `extractMrzText()`, `extractVisualField()`, `extractText()` contract
+
+All three have different method signatures. A manual `ProviderOcrEngineAdapter` in `ocr_pipeline.ts` bridges #2 to #1, but #3 (PaddleOcrProvider) remains separate.
+
+**Impact:** Adding a new OCR provider requires implementing 3 interfaces. The adapter pattern adds complexity without clear benefit.
+
+#### C3. Massive MRZ Parser Duplication
+
+**Severity: CRITICAL**
+
+Three near-identical MRZ parser implementations:
+
+| File                             | Lines | Status                              |
+| -------------------------------- | ----- | ----------------------------------- |
+| `services/mrz_parser.ts`         | 942   | **Appears dead** — no imports found |
+| `services/mrz_parser_service.ts` | 264   | Used by pipeline                    |
+| `ocr/mrz_parser.ts`              | 849   | Used by local OCR provider          |
+
+All three parse TD1/TD2/TD3 formats with near-identical field extraction, check digit computation, and repair logic. The check digit logic is duplicated in a **4th location**: `services/mrz_checksum_validator.ts` (177 lines).
+
+**Impact:** ~2,000 lines of dead or duplicated code. Bug fixes in one parser never propagate to the others. Cross-language MRZ logic in both TypeScript and Python.
+
+#### C4. Settings Data Loss — No Persistence Between Sessions
+
+**Severity: CRITICAL**
+
+- **Rust `AppSettings`** (in `app_state.rs`) has `ocr_worker_path`, `ocr_language`, `output_directory`, `temp_directory`, `theme`
+- **TypeScript `AppSettings`** (in `types/settings.ts`) has entirely different fields: `defaultExcelFolder`, `maskDocumentNumberInLogs`, `fieldOrder`, `keyboardShortcuts`
+- **Rust commands** store settings in an in-memory `Mutex<AppSettings>` — **never persisted to disk**
+- **TypeScript stores** settings in IndexedDB via `settingsStore`
+
+These two structs share **zero fields in common**. The frontend and backend are saving/loading entirely different configurations.
+
+**Impact:** User settings are silently lost on application restart. Frontend and backend operate on independent, incompatible configuration models.
 
 ---
 
-## 3. Anti-Patterns & Code Smells
+## 3. Critical Architecture Issues
 
-### 3.1 God Objects / Monolithic Files
+### C5. TypeScript ↔ Python ↔ Rust Type Drift
 
-| File                                                        | Lines | Smell                                                                                            |
-| ----------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------ |
-| `apps/desktop/src/features/fill/safetyEngine.ts`            | 1609  | Contains fuzzy matching, validation, scoring, recommendations, quick fixes — 5+ responsibilities |
-| `apps/desktop/src/screens/FillAssistantScreen.tsx`          | 802   | UI rendering + state management + keyboard handling + field operations                           |
-| `apps/desktop/src/services/auto-fill-execution-service.ts`  | 560   | Service + executor + clipboard logic                                                             |
-| `apps/desktop/src/ocr/paddle_ocr_engine.ts`                 | 331   | Engine + field parsing + confidence + fallback                                                   |
-| `workers/ocr/guestfill_ocr/ocr/ocr_selector.py`             | 402   | Candidate selection + multi-language fallback + scoring                                          |
-| `workers/ocr/guestfill_ocr/passport/passport_visual_ocr.py` | 285   | Field extraction + MRZ find + transliteration                                                    |
+Multiple type definitions are duplicated across all three languages with inconsistent enum values:
 
-### 3.2 Code Duplication
+| Concept       | TypeScript                       | Python                      | Rust     | Drift                                     |
+| ------------- | -------------------------------- | --------------------------- | -------- | ----------------------------------------- |
+| `Gender`      | `"M" \| "F" \| "X" \| "UNKNOWN"` | Male/Female (boolean-ish)   | -        | Python missing `X`, Rust missing entirely |
+| `GuestStatus` | 6 values incl. `MISSING_DATA`    | 5 values, no `MISSING_DATA` | -        | Python enum stale                         |
+| Warning codes | 15 codes in types                | 50+ in constants            | -        | Massive drift                             |
+| `AppSettings` | 15+ fields                       | -                           | 5 fields | Zero overlap                              |
 
-| Description                     | Files                                                                                                |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| MRZ check digit validation      | `mrz_validator.py` (Python) + `mrz_checksum_validator.ts` (TS)                                       |
-| ISO3 country validation         | `ocr_confidence_service.ts:49-299` + `safetyEngine.ts:198-265`                                       |
-| Sensitive data masking          | `audit-log-service.ts:79-96` + `auto-fill-execution-service.ts:112-120` + `ocr_api.ts:282-303`       |
-| IndexedDB store wrappers        | Repeated for audit_logs, auto_fill_profiles, settings, fill_events                                   |
-| MRZ field parsing (TD1/TD2/TD3) | `paddle_ocr_engine.ts:228-319` + `mrz_parser_service.ts` (TS) + `passport/mrz_parser.py` (Python)    |
-| OCR candidate scoring logic     | `_score_td1_check_digits`, `_score_td2_check_digits`, `_score_td3_check_digits` are nearly identical |
-| Multi-language OCR fallback     | `_try_multi_lang_candidates` (line 266) and `try_multi_lang_paddleocr` (line 318) share ~80% code    |
+### C6. IndexedDB Connection Per Call
 
-### 3.3 Inconsistent Error Handling
+`lib/db.ts:openDb()` opens a new IndexedDB connection on every CRUD call. Browsers limit per-origin connections (~20 in Chrome). Rapid operations (e.g., saving 100 guest rows) exhaust the connection pool.
 
-- **Dual patterns:** Some services use `Result<T,E>` discriminated unions, others throw exceptions.
-- **Mixed paradigms:** `ocr_api.ts` returns `Result<_, ApiError>`, while `ocr_pipeline_service.ts` throws typed Errors.
-- **Error type loss:** `Object.assign(error, { type })` pattern in pipeline service loses error type on serialization boundary.
+### C7. Excel Import Unsafe Cast
 
-### 3.4 Inline Business Logic in Components
+`features/excel/excelImport.ts:141` uses `as unknown as ArrayBuffer` — a double cast that bypasses all type safety. If the data structure is incompatible, SHA-256 silently produces incorrect results.
 
-**File:** `apps/desktop/src/screens/FillAssistantScreen.tsx:40-56`
+---
 
-- `accuracyBorderColor`, `accuracyBadge`, `accuracyBar` — presentation logic mixed with business thresholds (0.9, 0.7).
+## 4. Frontend Issues: Screens & Components
 
-### 3.5 Global Mutable State
+### 4.1 Monolithic Components
 
-- `ocrStore.ts:22` — in-memory `Map` for OCR jobs (lost on refresh)
+| Component                   | Lines   | Problem                                                                |
+| --------------------------- | ------- | ---------------------------------------------------------------------- |
+| `FillAssistantScreen.tsx`   | **801** | UI + keyboard handling + business logic + state management + clipboard |
+| `SettingsPage.tsx` (ui/)    | **494** | 7 setting sections in one component                                    |
+| `SetupWizard.tsx` (ui/)     | **463** | 5 wizard steps in one component                                        |
+| `GuestForm.tsx`             | **357** | Form rendering + field tracking + confidence calculation               |
+| `TemplateManagerScreen.tsx` | **285** | CRUD + import/export + clipboard                                       |
+
+### 4.2 Duplicated Field Labels
+
+The same 14 field labels defined in **at least 5 locations**:
+
+1. `GuestForm.tsx` — `GUEST_FIELDS` (lines 13-28)
+2. `ReviewScreen.tsx` — via `AUTOFILL_FIELD_META` from `ocr/autofill.ts`
+3. `ExtractedResultReviewScreen.tsx` — `FIELD_LABELS` (lines 16-31)
+4. `ManualCorrectionScreen.tsx` — `FIELD_META` (lines 16-31)
+5. `FinalConfirmationScreen.tsx` — `SUMMARY_LABELS` (lines 14-27)
+
+### 4.3 Triplicated Field-Editing Pattern
+
+Three components implement the same `edits` state map + `getCurrentValue` + `handleChange` pattern:
+
+1. `ReviewScreen.tsx` (255 lines)
+2. `ManualCorrectionScreen.tsx` (155 lines)
+3. `GuestForm.tsx` (357 lines)
+
+### 4.4 Duplicated Status/Confidence Functions
+
+- `STATUS_LABELS` object identical in `GuestForm.tsx` (lines 48-54) and `OCRProviderSelector.tsx` (lines 27-33)
+- Confidence color functions duplicated across `GuestForm.tsx`, `ExtractedResultReviewScreen.tsx`, `ReviewScreen.tsx`, `FillAssistantScreen.tsx`
+- Engine/language labels duplicated in `SetupWizard.tsx` and `SettingsPage.tsx`
+
+### 4.5 Inconsistent Tauri IPC Access
+
+Three patterns co-exist:
+
+1. **Through feature layer** (OcrScreen → `features/ocr/ocrApi.ts` → `invoke()`)
+2. **Direct import in screen** (`ImportExcelScreen.tsx` imports `@tauri-apps/api/dialog` directly)
+3. **Through api/ layer with Result monad** (`api/ocr_api.ts`)
+
+### 4.6 Missing Error Boundaries
+
+No React `ErrorBoundary` wrapping the route tree. Any unhandled render error crashes the full app.
+
+### 4.7 Misleading Button Behavior
+
+In `ReviewScreen.tsx`, both "Confirm & Autofill" and "Skip Review" buttons call `onConfirm(mergedFields)` — identical behavior. "Skip Review" is a misnomer.
+
+---
+
+## 5. Services Layer Issues
+
+### 5.1 Naming Inconsistency
+
+Three naming conventions in the same directory:
+
+| Convention | Files                                                                    |
+| ---------- | ------------------------------------------------------------------------ |
+| snake_case | `audit_logger.ts`, `mrz_parser.ts`, `ocr_pipeline_service.ts` (majority) |
+| camelCase  | `loggingService.ts`                                                      |
+| kebab-case | `audit-log-service.ts`, `settings-service.ts`                            |
+
+### 5.2 Partially Overlapping Service Files
+
+**`audit_logger.ts` (320 lines) vs `audit-log-service.ts` (494 lines) vs `loggingService.ts` (18 lines):**
+
+- `audit_logger.ts` — in-memory debug session artifacts
+- `audit-log-service.ts` — IndexedDB persistent event logging + CSV/JSON export (presentation concern in a service!)
+- `loggingService.ts` — in-lined log collector, **redundant** with Logger class in `lib/logging.ts`
+
+### 5.3 Mixed Concerns in Services
+
+- `auto-fill-execution-service.ts:494-557` contains **DOM/clipboard/platform-specific I/O** (fillWebField, fillDesktopField, copyToClipboard) — belongs in an infrastructure/adapter layer
+- `document_detector.ts:245-252` creates `<canvas>` elements — DOM code in a service
+- `mrz_cropper.ts` contains pixel-level image processing algorithms (CLAHE, sharpen, denoise, adaptive threshold) — belongs in `ocr/`
+- `image_quality_service.ts:200-570` has pixel-level analysis code duplicated with `image_quality.ts` in `ocr/`
+
+### 5.4 Duplicate MRZ Detection
+
+`computeHorizontalProjection()`, `smoothProjection()`, `findTextBands()`, `selectMrzBand()`, `estimateLineCount()`, `detectMrzFormat()` appear in **both**:
+
+1. `mrz_cropper.ts` (projection algorithms)
+2. `mrz_detection_service.ts` (same algorithms, different signatures)
+
+### 5.5 Dual Field Validator
+
+**`services/field_validator.ts` (868 lines)** vs **`ocr/field_validator.ts` (576 lines)**:
+
+- Both have `validateField()`, `validateExtractedFields()`, per-field validators
+- Both define `FieldValidationResult`, `FieldIssue`, `ValidationConfig` — but with **different shapes**
+- The `services/` version has country code repair logic; the `ocr/` version does not
+
+### 5.6 Error Handling Inconsistencies
+
+- **No shared `AppError` or `ServiceError` type** — each service defines its own error union
+- **Dual paradigm**: Some services throw typed Errors (via `Object.assign(error, { type })`), others return Result objects, others throw plain Errors
+- **`Result` monad from `lib/result.ts` is used in exactly one file** (`api/ocr_api.ts`) — all services throw exceptions instead
+- **Error type serialization**: `Object.assign(error, { type })` loses the `type` property across IPC boundaries
+
+---
+
+## 6. OCR Module Issues
+
+### 6.1 `ocr/autofill.ts` Contains UI Code
+
+`ocr/autofill.ts:91` exports `confidenceBorder()`, `confidenceBadge()`, `severityBorder()`, `severityBadge()` — functions that return **Tailwind CSS class strings**. This is presentation logic in the OCR module.
+
+### 6.2 `ocr/confidence_scoring.ts` (24 Lines) — Trivially Small
+
+Contains `needsReview()`, `fieldsRequiringReview()`, `getOverallConfidence()`, `isReadyForAutofill()` — all of which duplicate concepts in:
+
+- `services/ocr_confidence_service.ts` (596 lines)
+- `services/confidence-scoring-service.ts` (171 lines)
+
+### 6.3 `ocr-controller.ts` — Parallel Implementation
+
+Uses a completely different abstraction set (shared `OcrProvider` interface, its own state machine, its own `mapToGuestRow()`) that does NOT integrate with `ocr_pipeline.ts` or any services. Appears to be an older/alternate entry point.
+
+### 6.4 `services/ocr_provider.ts` — Third OcrProvider Interface
+
+Defines a **third** `OcrProvider` interface (with `extractMrzText`, `extractVisualField`, `extractText`) separate from the shared package's `OcrProvider`. Only `PaddleOcrProvider` implements this.
+
+---
+
+## 7. State Management Issues
+
+### 7.1 Global Mutable State
+
+- `ocrStore.ts` — in-memory `Map` for OCR jobs (lost on refresh)
 - `fillStore.ts` — in-memory session state
 - `ocr_api.ts:71` — mutable `state` property
 
-### 3.6 Missing Error Boundaries
+### 7.2 Zustand Stores Without Persistence
 
-- No `ErrorBoundary` component wrapping the route tree (`App.tsx`). Any unhandled render error will crash the full app.
+Feature stores (`ocrStore.ts`, `fillStore.ts`, `settingsStore.ts`) use Zustand but do not use `persist` middleware. State is lost on page refresh.
 
-### 3.7 Direct Use of Defaults Instead of User Config
+### 7.3 SettingsStore Duplication
 
-**File:** `apps/desktop/src/screens/FillAssistantScreen.tsx:99,264`
-
-- `DEFAULT_FIELD_ORDER` and `DEFAULT_KEYBOARD_SHORTCUTS` are hard-referenced instead of loading user settings, making settings UI effectively decorative.
-
-### 3.8 Python `try/except` without specific exceptions
-
-**File:** `workers/ocr/guestfill_ocr/passport/passport_visual_ocr.py:195`
-
-```python
-except Exception as e:
-    return Err(OcrError(...))
-```
-
-Bare `except Exception` hides bugs (e.g., `KeyboardInterrupt`, `MemoryError`).
+`features/settings/` and `services/settings-service.ts` both define `AppSettings` type — two parallel, drifting type hierarchies.
 
 ---
 
-## 4. Maintainability Issues
+## 8. Tauri Rust Backend Issues
 
-### 4.1 No Dependency Injection Framework
+### 8.1 Settings Persistence is a Stub
 
-Services use manual injection via factory functions (e.g., `createOcrPipelineService(imageQuality?, ...)`) — this works but becomes unwieldy with >5 dependencies and there is no centralized container.
+`load_settings` / `save_settings` operate on an in-memory `Mutex<AppSettings>` — **never written to disk**. Settings lost on every restart.
 
-### 4.2 TypeScript Type Safety Erosion
+### 8.2 OCR Commands Have Placeholder
 
-- Extensive use of `as` casts:
-  - `as Record<string, unknown>` — 15+ occurrences
-  - `as unknown as ArrayBuffer` — type escape hatch
-  - `as Promise<OcrFieldResults>` — lying to the compiler
-- `apps/desktop/src/screens/FillAssistantScreen.tsx:112`: `(guest as Record<string, unknown>)[fieldKey]` bypasses all type checking on guest fields.
+`run_ocr_placeholder` (line 149) returns hardcoded zero-filled data. Still registered as a real Tauri command.
 
-### 4.3 Cross-Language Duplication
+### 8.3 Excel Commands Are Stubs
 
-MRZ check digit validation is implemented independently in:
+`export_excel_placeholder` and `import_excel_placeholder` are no-ops returning empty data.
 
-- `workers/ocr/guestfill_ocr/passport/mrz_validator.py` (~226 lines)
-- `apps/desktop/src/services/mrz_checksum_validator.ts` (~177 lines)
+### 8.4 Auto-Fill Commands Are macOS-Only
 
-Different implementations mean different bug profiles and double maintenance.
+- `focus_app_window`, `fill_desktop_field`, `fill_web_field` use AppleScript (`osascript`)
+- Silent failures on Windows/Linux
+- `fill_web_field` ignores the selector parameter and always uses Cmd+V
 
-### 4.4 Test Coverage Gaps
+### 8.5 Clipboard Data Never Auto-Cleared
 
-Services with insufficient or missing tests:
+`copy_to_clipboard` has no auto-clear mechanism despite `clearClipboardAfterSeconds` existing in the settings type. Passport numbers remain on the system clipboard indefinitely.
 
-- `audit-log-service.ts` — no unit tests found
-- `fileUtils.ts` — no unit tests found
-- `isTauri.ts` — no unit tests
-- `copyAssistant.ts` — partial coverage in integration tests only
-- `excelImport.ts` — no dedicated unit tests
-- Python `passport_visual_ocr.py` — minimal test coverage
+### 8.6 Error Handling Is String-Based
 
-### 4.5 No Backward-Compatible API Versioning
+`AppError` uses `code: String` — no typed enum variants. Frontend must do fragile string comparison.
 
-Tauri commands (`invoke("run_ocr")`, etc.) have no versioning. Any change breaks all consumers simultaneously.
+### 8.7 Concurrency Concerns
 
-### 4.6 Configuration Redundancy
+- `AppState.settings` uses `std::sync::Mutex` (blocking) but Tauri commands are `async`
+- No OCR job queuing — concurrent `run_ocr` calls launch independent subprocesses
 
-- `workers/ocr/guestfill_ocr/config/country_codes.json` (file) duplicates `ISO3_COUNTRIES` (TS code) and `ISO3_FROM_ISO2` (TS code).
-- Excel column definitions exist in: `packages/shared/constants/columns.ts`, `workers/ocr/.../excel/columns.py`, `workers/ocr/.../config/excel_columns.json`.
+### 8.8 Blocking Dialog API
 
-### 4.7 Rust Backend Stub Commands
-
-**File:** `apps/desktop/src-tauri/src/commands/`
-
-- `excel_commands.rs:16,19` — `export_excel_placeholder` and `import_excel_placeholder` are no-op stubs.
-- `ocr_commands.rs:75` — `run_ocr_placeholder` returns mock data.
+`file_commands.rs` uses `tauri::api::dialog::blocking` (synchronous), blocking the async runtime.
 
 ---
 
-## 5. Design Pattern Suggestions
+## 9. Shared Package Issues
 
-### 5.1 Strategy Pattern — OCR Engine Selection
+### 9.1 Type-Level Bugs
 
-**Current:** If-else chains in `ocr_selector.py:200-263` and `paddle_ocr_engine.ts:75-123` to choose between PaddleOCR, Tesseract, multi-language fallback.
+- `GENDER` constant missing `"X"` while `Gender` type includes it. Any code referencing `GENDER.X` gets a compilation error.
+- `GuestStatus` type has `"MISSING_DATA"` but Python's `GuestStatus` enum does not. Cross-language status values silently dropped.
+- `FillAction` and `FillEventType` are near-identical string unions that will inevitably drift.
 
-**Suggested:** A `Strategy` interface with concrete implementations (`PaddleOcrStrategy`, `TesseractStrategy`, `MultiLangStrategy`) selected by a `Context` class, making engine selection extensible without modifying existing code.
+### 9.2 Weakly Typed Types
 
-### 5.2 Repository Pattern — Data Access
+- `FillState.copiedFields` and `filledFields` are `Record<string, boolean>` — no key constraint linking to `OcrFieldKey`
+- `SafetyRule.config` is `Record<string, string>` — completely untyped
+- `OcrProcessingOptions` is anemic — no language, confidence threshold, or tuning parameters
 
-**Current:** Ad-hoc `createIndexedDb*Store()` factories duplicated across 3+ files (audit-log, auto-fill-profile, settings).
+### 9.3 Masking Utility Gaps
 
-**Suggested:** Single `IndexedDbRepository<T>` generic class parameterized by store name and key path, eliminating boilerplate duplication.
+`packages/shared/src/utils/masking.ts`:
 
-### 5.3 Observer/EventEmitter — Pipeline Progress
+- `maskFullName` only masks the **last** name, exposing given names
+- No `maskDateOfBirth`, `maskPhoneNumber`, or `maskEmail` functions
+- `maskString` shows first 4 chars by default — for short values like `"M"` (gender), full value is exposed
 
-**Current:** Callback-based `onProgress` function passed through constructor chain.
+### 9.4 Date Utility Bugs
 
-**Suggested:** `EventEmitter` pattern with typed events (`pipeline:progress`, `pipeline:stage-change`, `pipeline:error`) allows multiple subscribers (UI, logging, diagnostics) without threading callbacks through constructors.
+- `parseDate()` uses `new Date(dateString)` — browser-inconsistent parsing
+- `isValidDate` returns `true` for invalid dates like `"2021-02-30"` because `new Date()` auto-corrects
 
-### 5.4 Chain of Responsibility — Field Validation
+---
 
-**Current:** `safetyEngine.ts` uses a single monolithic function `getAccuracyRecommendations` (~180 lines) checking every field type in sequence.
+## 10. Python OCR Worker Issues
 
-**Suggested:** Chain of validators (`PassportValidator`, `DateValidator`, `GenderValidator`, `NameValidator`) each handling one concern, composable and testable individually.
+### 10.1 OCR Engine Selection — Deeply Nested Logic
 
-### 5.5 Decorator Pattern — Confidence Scoring
+`ocr_selector.py:200-263` has multiple levels of if/else for PaddleOCR success/failure, multi-language fallback, and Tesseract fallback. The `_try_multi_lang_candidates` (line 266) and `try_multi_lang_paddleocr` (line 318) share ~80% code.
 
-**Current:** Static scoring in `ocr_confidence_service.ts` with all penalties/bonuses hardcoded.
+### 10.2 TD1 Composite Check Digit Never Scored
 
-**Suggested:** `ConfidenceScorer` base interface with decorators (`DateValidationDecorator`, `CheckDigitDecorator`, `CountryValidationDecorator`) stacked dynamically based on available data.
+`_score_td1_check_digits` in `ocr_selector.py:72-90` never scores the TD1 composite check digit (`line2[29:30]`), even though `TD1_LAYOUT` defines it. TD1 candidates get inflated scores vs TD2/TD3.
 
-### 5.6 Template Method — MRZ Detection Flow
+### 10.3 `validate_full_mrz` Always Validates as TD3
 
-**Current:** `HeuristicMrzDetectionService` and `TauriMrzDetectionService` implement the full flow independently with duplicated orchestration.
+`mrz_validator.py:171-172` calls `validate_check_digits_td3` regardless of the actual MRZ format.
 
-**Suggested:** Template Method with abstract steps (`loadImage`, `computeProjection`, `findBands`, `selectBand`, `extractRegion`) shared across implementations.
+### 10.4 Global PaddleOCR Instance Caching
 
-### 5.7 Command Pattern — Fill Actions
+`_PPOCR_INSTANCES` dict caches instances with no cleanup mechanism. Corrupted models require a full process restart.
 
-**Current:** Direct mutation of guest state in `FillAssistantScreen.tsx` for quick-fix applications, with no undo support.
+### 10.5 Bare `except Exception`
 
-**Suggested:** `Command` pattern with `ApplyQuickFixCommand`, `CopyFieldCommand`, `MarkFilledCommand` — each supporting `execute()` / `undo()` for reversible operations.
+`passport_visual_ocr.py:195` catches all exceptions, masking `KeyboardInterrupt`, `SystemExit`, `GeneratorExit`.
 
-### 5.8 Builder Pattern — NormalizedFields Construction
+### 10.6 Two Configuration Systems
 
-**Current:** Manual object construction in `mapParseResultToMrzParsedFields` with spread operators.
+`config_loader.py:load_options()` returns a plain dict while `load_ocr_config()` returns an `OcrConfig` dataclass. These represent overlapping config but use different types. `DEFAULT_OPTIONS` is duplicated in `config_loader.py` and `cli/request_reader.py`.
 
-**Suggested:** `NormalizedFieldsBuilder` with fluent API for composing fields from multiple sources (MRZ + visual + manual) with validation at build time.
+### 10.7 Visual OCR Name Filter Discards Valid Names
 
-### 5.9 State Pattern — OCR Session Management
+`passport_visual_ocr.py:131-141` rejects names with hyphens, apostrophes, or fewer than 3 distinct characters. Names like "Le" or "O'Brien" are silently discarded.
 
-**Current:** Discriminated union `OcrSessionState` in `ocr_api.ts:39-42` with switch logic.
+---
 
-**Suggested:** Full State pattern with `IdleState`, `ProcessingState`, `ConfirmedState` classes each owning valid transitions, preventing illegal state changes at compile time.
+## 11. Configuration & Environment Issues
 
-### 5.10 Adapter Pattern — External System Integration
+### 11.1 `.env.example` is Minimal
 
-**Current:** `DefaultFillExecutor` has inline logic for web/desktop/clipboard fill with `if (isTauri())` checks.
+Only 3 variables, none for API keys, worker path, or storage locations. `GUESTFILL_ENABLE_ONLINE_OCR` is never read by the worker. `GUESTFILL_LOCAL_BRIDGE_PORT` references a feature that doesn't exist.
 
-**Suggested:** Adapters (`WebFillAdapter`, `DesktopFillAdapter`, `ClipboardFillAdapter`) implementing a common `FillAdapter` interface, selected by a resolver based on runtime environment.
+### 11.2 Hardcoded Thresholds Everywhere
+
+| Location                                      | Values     | Issue                               |
+| --------------------------------------------- | ---------- | ----------------------------------- |
+| `services/ocr_pipeline_service.ts:74`         | `0.6`      | Confidence threshold hardcoded      |
+| `services/mrz_detection_service.ts:32-38`     | 7 values   | MRZ detection params hardcoded      |
+| `services/ocr_confidence_service.ts:38-47`    | 10 values  | Scoring thresholds hardcoded        |
+| `services/auto-fill-execution-service.ts:122` | `100` ms   | Field delay hardcoded               |
+| `config/constants.ts`                         | 65+ values | Many should come from user settings |
+
+### 11.3 No API Key Management
+
+No secure storage mechanism for API keys. No documentation of how Azure/online OCR keys would be provided. The `.env.example` deliberately avoids defining API keys.
+
+### 11.4 Configuration Redundancy
+
+- Excel columns in 3 places: `columns.ts` (TS), `columns.py` (Python), `excel_columns.json` (JSON)
+- Country codes in 2 places: `ISO3_COUNTRIES` (TS) + `country_codes.json` (Python)
+- Warning codes: 15 in TS types, 50+ in Python constants — no single source of truth
+
+---
+
+## 12. Security & Privacy Issues
+
+### 12.1 Clipboard Data Never Cleared (Repeated)
+
+`clipboard_commands.rs:copy_to_clipboard` has no auto-clear timer. Although `clearClipboardAfterSeconds` exists in the settings model, it is never enforced. Passport numbers and ID data persist on the system clipboard.
+
+### 12.2 Five Separate PII Masking Implementations
+
+| File                   | Lines   | Scope                  |
+| ---------------------- | ------- | ---------------------- |
+| `lib/logging.ts`       | 28-63   | Logger context masking |
+| `audit_logger.ts`      | 178-213 | Debug artifacts        |
+| `audit-log-service.ts` | 67-107  | Persistent audit logs  |
+| `ocr-controller.ts`    | 188-202 | Controller logging     |
+| `api/ocr_api.ts`       | 282-303 | API layer logging      |
+
+All five have different key lists and masking strategies. Sensitive data may leak through the least comprehensive implementation.
+
+### 12.3 Nested Arrays Not Masked
+
+`audit-log-service.ts:98-110` only masks top-level object keys. Arrays of objects are passed through unmasked.
+
+### 12.4 Python Masking Gaps
+
+- `safe_logging.py:SENSITIVE_KEYS` is hardcoded (11 keys) — new sensitive fields are not auto-detected
+- `sanitize_dict` does not recurse into nested dicts or arrays
+- `privacy_guard.py` only checks 4 regex patterns — no email, phone, or address patterns
+
+### 12.5 Cross-Language Masking Inconsistency
+
+Python masks 11 key types; TypeScript masks 14 patterns. No single source of truth for what constitutes sensitive data. Removing a sensitive field from one does not remove it from the other.
+
+### 12.6 No Error Boundaries
+
+No React `ErrorBoundary` means unhandled errors could expose internal state in the UI.
+
+### 12.7 Rust Error Codes Expose Internals
+
+String-based `AppError.code` values like `"IO_ERROR"`, `"SERIALIZATION_ERROR"` expose implementation details to the frontend.
+
+---
+
+## 13. Test Coverage Analysis
+
+### 13.1 Overall Quality
+
+**Strong test infrastructure** with 102 test files across TypeScript and Python:
+
+| Layer                 | Files | Quality   |
+| --------------------- | ----- | --------- |
+| Desktop unit tests    | ~21   | Excellent |
+| Desktop service tests | ~18   | Excellent |
+| Desktop integration   | 2     | Very good |
+| Desktop feature/E2E   | ~15   | Excellent |
+| Python unit tests     | 24    | Very good |
+| Python E2E            | 3     | Good      |
+| Root-level E2E        | 4     | Excellent |
+
+### 13.2 Critical Gaps
+
+| Gap                                     | Severity   | Detail                                                          |
+| --------------------------------------- | ---------- | --------------------------------------------------------------- |
+| **No real OCR engine tests**            | **HIGH**   | All OCR tests use MockOcrEngine or mocked Tauri IPC             |
+| **No performance/benchmark tests**      | **HIGH**   | No throughput, memory, or stress tests                          |
+| **No UI component tests**               | **MEDIUM** | Only 2 component test files (ReviewScreen, OCRProviderSelector) |
+| **No Tauri backend tests**              | **MEDIUM** | Rust backend (10 files) has zero tests                          |
+| **No security penetration tests**       | **MEDIUM** | Only basic masking/sanitization tests                           |
+| **Browser extension untested**          | **MEDIUM** | Minimal coverage                                                |
+| **image-quality test duplicates logic** | **MEDIUM** | Thresholds copied from source, not imported                     |
+
+### 13.3 Test Anti-Patterns Found
+
+- `image_quality_service.test.ts:` re-implements the warning detection logic locally instead of importing from the source
+- `ocr_pipeline_service.test.ts:` tests the orchestrator with all sub-services mocked — only verifies orchestration, not actual pipeline behavior
+- MockOcrEngine contract is implicit — no contract test ensuring it stays in sync with real engines
+
+---
+
+## 14. Prioritized Refactor Recommendations
+
+### Phase 1: Foundation (Critical — Must Fix First)
+
+| #    | Area                         | Action                                                                                                                                | Rationale                                   |
+| ---- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| P1.1 | Circular dependency          | Break `ocr/ ←→ services/` cycle. Move `ocr_pipeline.ts` into `services/` or extract shared orchestration types                        | Unblocks all other refactoring              |
+| P1.2 | Triple MRZ parser            | Consolidate `services/mrz_parser.ts` (dead), `services/mrz_parser_service.ts`, and `ocr/mrz_parser.ts` into one shared implementation | Eliminates ~2,000 lines of duplicated logic |
+| P1.3 | Settings persistence         | Unify Rust + TypeScript settings models. Implement IndexedDB persistence with Tauri sync                                              | Fixes silent data loss                      |
+| P1.4 | Dual field validator         | Merge `services/field_validator.ts` and `ocr/field_validator.ts` into one canonical validator                                         | Eliminates conflicting validation logic     |
+| P1.5 | Clipboard security           | Implement auto-clear timer for clipboard                                                                                              | Closes security gap                         |
+| P1.6 | Unified OCR interface        | Merge 3 competing OCR abstractions into one `OcrProvider` interface with adapter implementations. Remove `OcrEngine` interface        | Enables extensible provider architecture    |
+| P1.7 | IndexedDB connection pooling | Implement singleton connection manager in `lib/db.ts`                                                                                 | Fixes connection exhaustion                 |
+
+### Phase 2: High Priority (Architecture & Maintainability)
+
+| #     | Area                        | Action                                                                           | Rationale                           |
+| ----- | --------------------------- | -------------------------------------------------------------------------------- | ----------------------------------- |
+| P2.1  | God components              | Split `FillAssistantScreen.tsx` (801 lines) into custom hooks + sub-components   | Enables testing, reduces complexity |
+| P2.2  | Split `SettingsPage.tsx`    | Extract each setting section into its own component                              | Follows single-responsibility       |
+| P2.3  | Split `SetupWizard.tsx`     | Extract each wizard step into its own component                                  | Same as P2.2                        |
+| P2.4  | Duplicate field labels      | Create single `fieldDefinitions.ts` in `config/`                                 | Single source of truth              |
+| P2.5  | Triplicated field editor    | Extract reusable `FieldEditor` component                                         | Eliminates pattern duplication      |
+| P2.6  | Duplicate confidence/status | Create shared `ConfidenceBadge` and `StatusBadge` components                     | Eliminates color logic duplication  |
+| P2.7  | Inline SVGs                 | Extract shared SVG icon set                                                      | Reduces code, enables theming       |
+| P2.8  | Naming cleanup              | Unify snake_case → camelCase in all TypeScript                                   | Consistency                         |
+| P2.9  | Merge audit loggers         | Consolidate `audit_logger.ts`, `audit-log-service.ts`, `loggingService.ts`       | Single audit module                 |
+| P2.10 | Merge confidence scorers    | Merge `confidence-scoring-service.ts` into `ocr_confidence_service.ts`           | Eliminates overlap                  |
+| P2.11 | PII masking unification     | Single `masking.ts` utility used consistently across all layers                  | No sensitive data leaks             |
+| P2.12 | MRZ detection consolidation | Merge projection algorithms from `mrz_cropper.ts` and `mrz_detection_service.ts` | Eliminates algorithmic duplication  |
+
+### Phase 3: Medium Priority (Code Quality & UX)
+
+| #     | Area                                | Action                                                                                | Rationale                  |
+| ----- | ----------------------------------- | ------------------------------------------------------------------------------------- | -------------------------- |
+| P3.1  | Error boundaries                    | Add React `ErrorBoundary` wrapping routes                                             | Prevents full-app crashes  |
+| P3.2  | Fix "Skip Review" button            | Make it actually skip review (pass original fields)                                   | Fixes misleading UX        |
+| P3.3  | Global error handling               | Create shared `AppError` class hierarchy                                              | Consistent error handling  |
+| P3.4  | Tauri IPC abstraction               | All Tauri calls through feature layers, never direct from screens                     | Decouples from Tauri       |
+| P3.5  | `Result` monad adoption             | Use `Result<T, E>` consistently across services                                       | Functional error handling  |
+| P3.6  | Settings → user config              | Load actual user settings instead of using `DEFAULT_*` constants                      | Settings become functional |
+| P3.7  | Type safety cleanup                 | Replace `as` casts with proper type guards                                            | Stronger type guarantees   |
+| P3.8  | Remove stub commands                | Replace `run_ocr_placeholder`, `export_excel_placeholder`, `import_excel_placeholder` | Eliminates fake routes     |
+| P3.9  | Add `Gender.X` to `GENDER` constant | Fix type/const mismatch                                                               | Type-correctness           |
+| P3.10 | Masking utility enhancements        | Add `maskDateOfBirth`, `maskPhoneNumber`, `maskEmail`                                 | Complete coverage          |
+
+### Phase 4: Lower Priority (Polish & Future-Proofing)
+
+| #    | Area                               | Action                                                                                                                          | Rationale                  |
+| ---- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| P4.1 | Configuration centralization       | Single source of truth for thresholds, country codes, warning codes                                                             | Eliminates drift           |
+| P4.2 | `OcrProcessingOptions` enhancement | Add language, confidence thresholds to the type                                                                                 | Future provider support    |
+| P4.3 | Rust error type enum               | Replace `code: String` with `AppErrorCode` enum                                                                                 | Typed error matching       |
+| P4.4 | Rust async dialog                  | Replace blocking dialog with async API                                                                                          | Non-blocking UI            |
+| P4.5 | Python OCR selector refactor       | Strategy pattern for engine selection                                                                                           | Extensible engine addition |
+| P4.6 | Cross-platform auto-fill           | Implement Windows/Linux alternatives to AppleScript                                                                             | Platform parity            |
+| P4.7 | Remove dead code                   | `services/mrz_parser.ts` (942 lines dead), `ocr/autofill.ts` (UI code in wrong module), `ocr/confidence_scoring.ts` (redundant) | Reduce maintenance burden  |
+| P4.8 | Python config consolidation        | Merge `config_loader.py` options + `OcrConfig` into single system                                                               | Clear config boundary      |
+| P4.9 | `.env.example` expansion           | Document all env vars: API keys, worker path, storage config                                                                    | Deployment readiness       |
+
+### Phase 5: Testing
+
+| #    | Area                        | Action                                                                        | Rationale                      |
+| ---- | --------------------------- | ----------------------------------------------------------------------------- | ------------------------------ |
+| P5.1 | Real OCR smoke test         | One test that runs real PaddleOCR against known test image (conditional skip) | Validates real engine behavior |
+| P5.2 | Performance benchmarks      | Throughput and memory benchmarks for OCR pipeline                             | Detects regressions            |
+| P5.3 | Component tests             | Add React Testing Library tests for key interactive components                | UI reliability                 |
+| P5.4 | Rust backend tests          | Unit tests for Tauri commands and error handling                              | Backend reliability            |
+| P5.5 | Contract tests              | Verify `MockOcrEngine` matches real engine interface                          | Prevents mock drift            |
+| P5.6 | Fix `image-quality.test.ts` | Import thresholds from source instead of duplicating                          | Tests reflect real code        |
+| P5.7 | Browser extension tests     | Add test coverage for `apps/browser-extension/`                               | Extension reliability          |
+
+---
+
+## 15. Migration Strategy
+
+### Approach: Incremental Refactoring in Place
+
+The codebase is large (~68K lines) and actively used. A "big bang" rewrite would break existing features. The recommended approach is:
+
+#### Step 1: Isolate (Phase 1)
+
+- Extract shared types to `packages/shared/src/`
+- Consolidate MRZ parsers into `services/mrz-parser.ts` (single file)
+- Fix settings persistence (P1.3)
+- Break circular dependency between `services/` and `ocr/`
+
+#### Step 2: Abstract (Phase 2)
+
+- Extract reusable components (`FieldEditor`, `ConfidenceBadge`, `StatusBadge`)
+- Unify OCR provider interface
+- Add shared icon set
+- Merge overlapping services (audit, confidence, masking)
+
+#### Step 3: Clean (Phase 3-4)
+
+- Split monolithic components
+- Remove stub commands
+- Fix type/const mismatches
+- Centralize configuration
+
+#### Step 4: Verify (Phase 5)
+
+- Add missing tests
+- Ensure existing tests still pass after each phase
+- Run accuracy tests to validate no regression
+
+### Verification Gates Per Phase
+
+1. All existing tests pass before starting each phase
+2. After each phase: `pnpm typecheck`, `pnpm lint`, `pnpm test`
+3. After Phase 1: OCR feature E2E tests pass
+4. After Phase 2: Full user journey tests pass
+5. After Phase 3: Accuracy tests show 100% for clean MRZ
+6. After Phase 4: No compiler warnings, lint passes
+
+### Rollback Plan
+
+Each phase should be implemented as a PR with:
+
+- Full test suite passing before merge
+- Feature flags where behavior changes significantly
+- Clear commit boundaries (one logical change per commit)
+
+---
+
+## Appendix: File Size Heatmap
+
+### Top 15 Largest Files (Need Splitting)
+
+| File                                      | Lines | Priority                      |
+| ----------------------------------------- | ----- | ----------------------------- |
+| `features/fill/safetyEngine.ts`           | 1,609 | P2                            |
+| `services/mrz_parser.ts`                  | 942   | P1.2 (consolidate, not split) |
+| `ocr/mrz_parser.ts`                       | 849   | P1.2                          |
+| `screens/FillAssistantScreen.tsx`         | 801   | P2.1                          |
+| `services/mrz_cropper.ts`                 | 772   | P2.12                         |
+| `services/field_validator.ts`             | 868   | P1.4                          |
+| `services/auto-fill-execution-service.ts` | 558   | P2                            |
+| `services/image_quality_service.ts`       | 629   | P3                            |
+| `services/ocr_confidence_service.ts`      | 596   | P2.10                         |
+| `services/ocr_pipeline_service.ts`        | 474   | P2                            |
+| `ui/components/SettingsPage.tsx`          | 494   | P2.2                          |
+| `ui/components/SetupWizard.tsx`           | 463   | P2.3                          |
+| `services/audit-log-service.ts`           | 494   | P2.9                          |
+| `local-ocr-provider.ts`                   | 528   | P2.14                         |
+| `components/GuestForm.tsx`                | 357   | P2.4-2.6                      |
+
+### Dead or Suspect Files
+
+| File                             | Lines | Suspicion                                                                                                     |
+| -------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------- |
+| `services/mrz_parser.ts`         | 942   | **Dead** — no imports found; `mrz_parser_service.ts` is used instead                                          |
+| `loggingService.ts`              | 18    | **Redundant** — same functionality in `lib/logging.ts` Logger class                                           |
+| `ocr/confidence_scoring.ts`      | 24    | **Redundant** — duplicates `services/ocr_confidence_service.ts`                                               |
+| `ocr/autofill.ts`                | 91    | **Misplaced** — UI/Tailwind constants in OCR module; should be in `config/`                                   |
+| `ui/components/SettingsPage.tsx` | 494   | Has 3 files serving the same settings UI: `SettingsPage.tsx`, `SetupWizard.tsx`, `screens/SettingsScreen.tsx` |
+
+---
+
+## Appendix: Cross-Language Type Drift Summary
+
+| Type          | TypeScript                    | Python                              | Rust     | Risk                             |
+| ------------- | ----------------------------- | ----------------------------------- | -------- | -------------------------------- |
+| `Gender`      | `M \| F \| X \| UNKNOWN`      | Male/Female (bool-ish)              | -        | Drift                            |
+| `GuestStatus` | 6 values                      | 5 values                            | -        | Silent data loss                 |
+| `WarningCode` | 15 values                     | 50+ values                          | -        | Feature detection differences    |
+| `AppSettings` | 15+ fields                    | -                                   | 5 fields | Settings lost                    |
+| `ExcelColumn` | `columns.ts`                  | `columns.py` + `excel_columns.json` | -        | Column order/size drift          |
+| `CountryCode` | `ISO3_COUNTRIES` (TS set)     | `country_codes.json`                | -        | Validation mismatch              |
+| `MRZ_WEIGHTS` | `[7, 3, 1]` in `constants.ts` | `compute_check_digit()` hardcoded   | -        | Check digit computation mismatch |

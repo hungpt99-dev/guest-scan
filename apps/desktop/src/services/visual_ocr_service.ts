@@ -1,4 +1,5 @@
-import { isTauri, requireTauri } from "../lib/isTauri";
+import { isTauri } from "../lib/isTauri";
+import { invokeIpc } from "../infra/ipc";
 import { logger } from "../lib/logger";
 import type { OcrEngine, OcrInput, OcrTextResult } from "../ocr/ocr_engine";
 import { PaddleOcrEngine } from "../ocr/paddle_ocr_engine";
@@ -205,9 +206,7 @@ class DefaultVisualOcrService implements VisualOcrService {
 
   private async cropViaTauri(imagePath: string, zone: VisualFieldZone): Promise<string | null> {
     try {
-      await requireTauri();
-      const { invoke } = await import("@tauri-apps/api/tauri");
-      const result = await invoke<string>("crop_visual_zone", {
+      const result = await invokeIpc<string>("crop_visual_zone", {
         imagePath,
         x: zone.x,
         y: zone.y,

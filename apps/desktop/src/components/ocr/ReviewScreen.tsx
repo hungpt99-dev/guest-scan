@@ -1,19 +1,16 @@
 import { useState, useMemo } from "react";
-import Card from "./common/Card";
-import Button from "./common/Button";
-import type { NormalizedFields } from "../services/field_normalization_service";
-import type { FieldConfidenceScores } from "../services/ocr_confidence_service";
-import { validateField, type FieldValidationResult } from "../ocr/field_validator";
+import Card from "../common/Card";
+import Button from "../common/Button";
+import { FieldEditor } from "./FieldEditor";
+import type { NormalizedFields } from "../../services/field_normalization_service";
+import type { FieldConfidenceScores } from "../../services/ocr_confidence_service";
+import { validateField, type FieldValidationResult } from "../../ocr/field_validator";
 import {
   AUTOFILL_FIELD_META,
-  confidenceBorder,
-  confidenceBadge,
-  severityBorder,
-  severityBadge,
   mergeFieldsWithEdits,
   countFieldsNeedingReview,
   getFieldConfidence,
-} from "../ocr/autofill";
+} from "../../ocr/autofill";
 
 type Props = {
   documentImage?: string;
@@ -25,7 +22,6 @@ type Props = {
 };
 
 const FIELD_META = AUTOFILL_FIELD_META;
-
 type FieldKey = keyof typeof FIELD_META;
 
 export default function ReviewScreen({
@@ -38,15 +34,16 @@ export default function ReviewScreen({
 }: Props) {
   const [edits, setEdits] = useState<Partial<Record<FieldKey, string>>>({});
 
-  const handleChange = (key: FieldKey, value: string) => {
+  const handleChange = (key: string, value: string) => {
     setEdits((prev) => {
-      const originalValue = fields[key as keyof NormalizedFields] as string;
+      const typedKey = key as FieldKey;
+      const originalValue = fields[typedKey as keyof NormalizedFields] as string;
       if (value === originalValue) {
         const next = { ...prev };
-        delete next[key];
+        delete next[typedKey];
         return next;
       }
-      return { ...prev, [key]: value };
+      return { ...prev, [typedKey]: value };
     });
   };
 
@@ -159,81 +156,20 @@ export default function ReviewScreen({
             const hasEdit = key in edits && edits[key] !== undefined;
             const hasErrors = vr.issues.some((i) => i.severity === "error");
 
-            let borderClass = "border-gray-200";
-            if (hasErrors) {
-              borderClass = severityBorder("error");
-            } else if (hasEdit) {
-              borderClass = "border-blue-300 bg-blue-50";
-            } else if (isLow) {
-              borderClass = confidenceBorder(fieldConf?.level ?? "MEDIUM");
-            }
-
             return (
-              <div key={key} className={`rounded-md border p-3 ${borderClass}`} data-testid={`field-${key}`}>
-                <div className="flex items-center justify-between">
-                  <label
-                    htmlFor={`review-field-${key}`}
-                    className="flex items-center gap-2 text-sm font-medium text-gray-700"
-                  >
-                    {meta.label}
-                    {hasErrors && (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severityBadge("error")}`}
-                        data-testid={`${key}-validation-error`}
-                      >
-                        INVALID
-                      </span>
-                    )}
-                    {!hasErrors && isLow && (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${confidenceBadge(fieldConf?.level ?? "MEDIUM")}`}
-                        data-testid={`${key}-confidence-badge`}
-                      >
-                        LOW CONFIDENCE
-                      </span>
-                    )}
-                  </label>
-                  {fieldConf && (
-                    <span className="text-xs text-gray-500">
-                      {Math.round(fieldConf.score * 100)}% &mdash; {fieldConf.level}
-                    </span>
-                  )}
-                </div>
-
-                <input
-                  id={`review-field-${key}`}
-                  type={meta.type}
-                  value={currentValue}
-                  onChange={(e) => handleChange(key, e.target.value)}
-                  placeholder={meta.placeholder}
-                  data-testid={`${key}-input`}
-                  className={`mt-1 block w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    hasErrors
-                      ? "border-red-400 bg-white"
-                      : hasEdit
-                        ? "border-blue-400 bg-white"
-                        : isLow
-                          ? "border-yellow-400 bg-white"
-                          : "border-gray-300 bg-gray-50"
-                  }`}
-                />
-
-                {hasEdit && <p className="mt-1 text-xs text-blue-600">Original: {originalValue || "(empty)"}</p>}
-
-                {vr.issues.length > 0 && (
-                  <div className="mt-1 space-y-0.5">
-                    {vr.issues.map((issue, i) => (
-                      <p
-                        key={i}
-                        className={`text-xs ${issue.severity === "error" ? "text-red-600" : "text-yellow-700"}`}
-                        data-testid={`${key}-issue-${i}`}
-                      >
-                        {issue.message}
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <FieldEditor
+                key={key}
+                fieldKey={key}
+                meta={{ label: meta.label, type: meta.type, placeholder: meta.placeholder }}
+                value={currentValue}
+                originalValue={originalValue}
+                confidence={fieldConf ? { level: fieldConf.level, score: fieldConf.score } : undefined}
+                isLowConfidence={isLow && !hasErrors}
+                hasError={hasErrors}
+                errorMessages={vr.issues.map((i) => i.message)}
+                hasEdit={hasEdit}
+                onChange={handleChange}
+              />
             );
           })}
         </div>

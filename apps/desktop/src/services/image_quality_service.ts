@@ -1,4 +1,5 @@
-import { isTauri, requireTauri } from "../lib/isTauri";
+import { isTauri } from "../lib/isTauri";
+import { invokeIpc } from "../infra/ipc";
 import { logger } from "../lib/logger";
 
 export type ImageInput = {
@@ -145,14 +146,10 @@ export function createImageQualityService(): ImageQualityService {
 
 class TauriImageQualityService implements ImageQualityService {
   async analyzeImage(input: ImageInput): Promise<ImageQualityResult> {
-    await requireTauri();
-
     logger.debug("ImageQualityService: analyzing image", { imagePath: input.imagePath });
 
     try {
-      const { invoke } = await import("@tauri-apps/api/tauri");
-
-      const raw = await invoke<{
+      const raw = await invokeIpc<{
         blurScore: number;
         brightness: number;
         contrast: number;

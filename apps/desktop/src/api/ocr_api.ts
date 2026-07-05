@@ -12,10 +12,10 @@ import { maskPassportNumber, maskFullName } from "@guestfill/shared";
 import { logger } from "../lib/logger";
 import { ok, err, type Result } from "../lib/result";
 
-export type ApiErrorCode = "CAPTURE_FAILED" | "NO_IMAGE" | OcrPipelineError;
+export type ApiSessionErrorCode = "CAPTURE_FAILED" | "NO_IMAGE" | OcrPipelineError;
 
-export type ApiError = {
-  code: ApiErrorCode;
+export type ApiSessionError = {
+  code: ApiSessionErrorCode;
   message: string;
   details?: unknown;
 };
@@ -42,24 +42,34 @@ export type OcrSessionState =
   | { stage: "CONFIRMED"; confirmed: ConfirmedFields };
 
 export interface OcrApi {
-  captureImage(source?: string): Promise<Result<CaptureResult, ApiError>>;
-  runOcr(image: ImageInput, onProgress?: (progress: PipelineProgress) => void): Promise<Result<OcrRunResult, ApiError>>;
-  getExtractedFields(): Promise<Result<OcrRunResult, ApiError>>;
-  confirmOcrResult(edits?: Partial<EditableFields>): Promise<Result<ConfirmedFields, ApiError>>;
-  saveGuestData(fields: NormalizedFields, metadata?: Record<string, unknown>): Promise<Result<SaveResult, ApiError>>;
+  captureImage(source?: string): Promise<Result<CaptureResult, ApiSessionError>>;
+  runOcr(
+    image: ImageInput,
+    onProgress?: (progress: PipelineProgress) => void,
+  ): Promise<Result<OcrRunResult, ApiSessionError>>;
+  getExtractedFields(): Promise<Result<OcrRunResult, ApiSessionError>>;
+  confirmOcrResult(edits?: Partial<EditableFields>): Promise<Result<ConfirmedFields, ApiSessionError>>;
+  saveGuestData(
+    fields: NormalizedFields,
+    metadata?: Record<string, unknown>,
+  ): Promise<Result<SaveResult, ApiSessionError>>;
   getSessionState(): OcrSessionState;
   resetSession(): void;
 }
 
-function mapPipelineError(error: unknown): { code: ApiErrorCode; message: string } {
+function mapPipelineError(error: unknown): { code: ApiSessionErrorCode; message: string } {
   if (error instanceof Error) {
-    const errType = (error as { type?: string }).type;
+    const errType = (error as { type?: string }).type as ApiSessionErrorCode | undefined;
     if (errType) {
-      return { code: errType as ApiErrorCode, message: error.message };
+      return { code: errType, message: error.message };
     }
-    return { code: "PIPELINE_FAILED" as ApiErrorCode, message: error.message };
+    return { code: "PIPELINE_FAILED", message: error.message };
   }
-  return { code: "PIPELINE_FAILED" as ApiErrorCode, message: "Unknown pipeline error" };
+  return { code: "PIPELINE_FAILED", message: "Unknown pipeline error" };
+}
+
+function maskImagePath(imagePath: string): string {
+  return imagePath.replace(/\/[^/]+\.\w+$/, "/***");
 }
 
 export function createOcrApi(pipeline?: OcrPipelineService): OcrApi {
@@ -74,7 +84,7 @@ class DefaultOcrApi implements OcrApi {
     this.pipeline = pipeline;
   }
 
-  async captureImage(source?: string): Promise<Result<CaptureResult, ApiError>> {
+  async captureImage(source?: string): Promise<Result<CaptureResult, ApiSessionError>> {
     logger.info("OcrApi: capture image requested", { source: source ?? "default" });
 
     try {
@@ -91,7 +101,7 @@ class DefaultOcrApi implements OcrApi {
       const image: ImageInput = { imagePath };
 
       logger.info("OcrApi: image captured", {
-        imagePath: imagePath.replace(/\/[^/]+\.\w+$/, "/***"),
+        imagePath: maskImagePath(imagePath),
         source: source ?? "camera",
       });
 
@@ -106,7 +116,7 @@ class DefaultOcrApi implements OcrApi {
   async runOcr(
     image: ImageInput,
     onProgress?: (progress: PipelineProgress) => void,
-  ): Promise<Result<OcrRunResult, ApiError>> {
+  ): Promise<Result<OcrRunResult, ApiSessionError>> {
     const progressLog: PipelineProgress[] = [];
 
     const callbacks: PipelineCallbacks = {
@@ -117,7 +127,7 @@ class DefaultOcrApi implements OcrApi {
     };
 
     logger.info("OcrApi: running OCR pipeline", {
-      imagePath: image.imagePath.replace(/\/[^/]+\.\w+$/, "/***"),
+      imagePath: maskImagePath(image.imagePath),
     });
 
     this.state = { stage: "PROCESSING", progress: [] };
@@ -150,7 +160,7 @@ class DefaultOcrApi implements OcrApi {
     }
   }
 
-  async getExtractedFields(): Promise<Result<OcrRunResult, ApiError>> {
+  async getExtractedFields(): Promise<Result<OcrRunResult, ApiSessionError>> {
     if (this.state.stage === "CONFIRMED") {
       return ok({ confirmed: this.state.confirmed, progress: [] });
     }
@@ -168,7 +178,7 @@ class DefaultOcrApi implements OcrApi {
     });
   }
 
-  async confirmOcrResult(edits?: Partial<EditableFields>): Promise<Result<ConfirmedFields, ApiError>> {
+  async confirmOcrResult(edits?: Partial<EditableFields>): Promise<Result<ConfirmedFields, ApiSessionError>> {
     if (this.state.stage !== "CONFIRMED") {
       return err({
         code: "NO_IMAGE",
@@ -234,7 +244,7 @@ class DefaultOcrApi implements OcrApi {
   async saveGuestData(
     fields: NormalizedFields,
     metadata?: Record<string, unknown>,
-  ): Promise<Result<SaveResult, ApiError>> {
+  ): Promise<Result<SaveResult, ApiSessionError>> {
     const safeMetadata = metadata ? this.maskSensitiveMetadata(metadata) : undefined;
 
     logger.info("OcrApi: saving guest data", {

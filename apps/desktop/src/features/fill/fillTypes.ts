@@ -34,3 +34,14 @@ export type FieldNavigationState = {
   fieldOrder: string[];
   guestIds: string[];
 };
+
+export type FieldInputType = "text" | "date" | "select" | "tel" | "email";
+
+export type FillFieldMeta = {
+  key: string;
+  label: string;
+  placeholder: string;
+  type?: FieldInputType;
+  required?: boolean;
+  group?: string;
+};

@@ -314,10 +314,10 @@ describe("MrzParser", () => {
 
     it("repairs multiple ambiguous characters in a single field", () => {
       const line1 = "P<UTOMUSTER<<JOHN<MICHAEL<<<<<<<<<<<<<<<<<<<<<<<";
-      const line2 = "AB12O45O<5UTO8510105M2001012<<<<<<<<<<<<<<<<0<<";
+      const line2 = "AB12O45O<7UTO8510105M2001012<<<<<<<<<<<<<<<<0<<";
       const result = parseMrz([line1, line2], { correctOcrErrors: true, validateChecksums: true });
 
-      expect(result.passportNumber.value).toBe("AB120456");
+      expect(result.passportNumber.value).toBe("AB120450");
       expect(result.passportNumber.corrected).toBe(true);
     });
 

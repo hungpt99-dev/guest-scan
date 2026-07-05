@@ -1,6 +1,8 @@
 import type { GuestRow, TargetSystemTemplate, ConfidenceLevel, TransformRule } from "@guestfill/shared";
 import { applyTransforms } from "./transformEngine";
 
+/* ───── Types ───── */
+
 export type FuzzyMatchResult = {
   match: boolean;
   similarity: number;
@@ -32,6 +34,26 @@ export type AggregateAccuracy = {
   perField: AccuracyInfo[];
   recommendations: AccuracyRecommendation[];
 };
+
+export type SafetyCheckResult = {
+  passed: boolean;
+  checks: SafetyCheck[];
+};
+
+export type SafetyCheck = {
+  name: string;
+  passed: boolean;
+  message?: string;
+};
+
+export type AccuracyInfo = {
+  field: string;
+  level: ConfidenceLevel;
+  score: number;
+  issues: string[];
+};
+
+/* ───── Passport patterns by country (ISO3) ───── */
 
 const PASSPORT_PATTERNS: Record<string, RegExp[]> = {
   GBR: [/^\d{9}$/],
@@ -92,6 +114,65 @@ const PASSPORT_PATTERNS: Record<string, RegExp[]> = {
   KHM: [/^\d{9}$/],
 };
 
+const PASSPORT_FORMAT_EXAMPLES: Record<string, string> = {
+  GBR: "9 digits (e.g., 123456789)",
+  USA: "9 digits (e.g., 123456789)",
+  CHN: "1 letter + 8 digits (e.g., E12345678) or 1 letter + 7 digits",
+  JPN: "2 letters + 7 digits (e.g., AB1234567)",
+  KOR: "8 digits (e.g., 12345678)",
+  RUS: "9 digits (e.g., 123456789)",
+  ARE: "2 letters + 7 digits (e.g., AB1234567)",
+  VNM: "1 letter + 7 digits (e.g., A1234567)",
+  IND: "1 letter + 7 digits (e.g., A1234567)",
+  FRA: "2 digits + 2 letters + 5 digits (e.g., 12AB34567)",
+  DEU: "1 letter + 8 digits (e.g., A12345678)",
+  ITA: "2 letters + 7 digits (e.g., AB1234567)",
+  ESP: "3 letters + 6 digits (e.g., ABC123456)",
+  BRA: "2 letters + 6 digits (e.g., AB123456)",
+  CAN: "2 letters + 6 digits (e.g., AB123456)",
+  AUS: "1 letter + 8 digits (e.g., A12345678)",
+  ZAF: "8 digits (e.g., 12345678)",
+  SGP: "1 letter + 7 digits (e.g., A1234567)",
+  MYS: "1 letter + 8 digits (e.g., A12345678)",
+  THA: "9 digits (e.g., 123456789)",
+  PHL: "2 letters + 7 digits (e.g., AB1234567)",
+  IDN: "8 digits (e.g., 12345678)",
+  MEX: "8 digits (e.g., 12345678) or 1 letter + 7 digits",
+  TUR: "1 letter + 8 digits (e.g., A12345678)",
+  NLD: "2 letters + 7 digits (e.g., AB1234567)",
+  SAU: "1 letter + 8 digits (e.g., A12345678)",
+  CHE: "8 digits (e.g., 12345678)",
+  SWE: "8 digits (e.g., 12345678)",
+  NOR: "8 digits (e.g., 12345678)",
+  DNK: "7 digits (e.g., 1234567)",
+  FIN: "2 letters + 7 digits (e.g., AB1234567)",
+  BEL: "2 letters + 6 digits (e.g., AB123456)",
+  AUT: "8 digits (e.g., 12345678)",
+  PRT: "8 digits (e.g., 12345678)",
+  GRC: "2 letters + 7 digits (e.g., AB1234567)",
+  IRL: "9 digits (e.g., 123456789)",
+  NZL: "2 letters + 6 digits (e.g., AB123456)",
+  POL: "9 digits (e.g., 123456789)",
+  CZE: "8 digits (e.g., 12345678)",
+  HUN: "8 digits (e.g., 12345678)",
+  ROU: "8 digits (e.g., 12345678)",
+  UKR: "9 digits (e.g., 123456789)",
+  ISR: "8 digits (e.g., 12345678)",
+  PAK: "2 letters + 7 digits (e.g., AB1234567)",
+  BGD: "1 letter + 8 digits (e.g., A12345678)",
+  EGY: "9 digits (e.g., 123456789)",
+  NGA: "8 digits (e.g., 12345678)",
+  KEN: "8 digits (e.g., 12345678)",
+  ARG: "3 letters + 6 digits (e.g., ABC123456)",
+  CHL: "8 digits (e.g., 12345678)",
+  COL: "10 digits (e.g., 1234567890)",
+  HKG: "2 letters + 7 digits (e.g., AB1234567)",
+  TWN: "9 digits (e.g., 123456789)",
+  MMR: "1 letter + 8 digits (e.g., A12345678)",
+  LAO: "2 letters + 7 digits (e.g., AB1234567)",
+  KHM: "9 digits (e.g., 123456789)",
+};
+
 const AMBIGUOUS_CHARS: Record<string, string[]> = {
   "0": ["O", "Q", "D"],
   O: ["0"],
@@ -110,6 +191,80 @@ const AMBIGUOUS_CHARS: Record<string, string[]> = {
   g: ["9"],
   q: ["9"],
 };
+
+export const ISO3_FROM_ISO2: Record<string, string> = {
+  VN: "VNM",
+  US: "USA",
+  KR: "KOR",
+  CN: "CHN",
+  JP: "JPN",
+  FR: "FRA",
+  DE: "DEU",
+  GB: "GBR",
+  IT: "ITA",
+  ES: "ESP",
+  CA: "CAN",
+  AU: "AUS",
+  BR: "BRA",
+  IN: "IND",
+  RU: "RUS",
+  MX: "MEX",
+  ID: "IDN",
+  NL: "NLD",
+  SA: "SAU",
+  CH: "CHE",
+  SE: "SWE",
+  NO: "NOR",
+  DK: "DNK",
+  FI: "FIN",
+  BE: "BEL",
+  AT: "AUT",
+  PT: "PRT",
+  GR: "GRC",
+  IE: "IRL",
+  NZ: "NZL",
+  SG: "SGP",
+  MY: "MYS",
+  TH: "THA",
+  PH: "PHL",
+  HK: "HKG",
+  TW: "TWN",
+  AR: "ARG",
+  CL: "CHL",
+  CO: "COL",
+  ZA: "ZAF",
+  EG: "EGY",
+  NG: "NGA",
+  KE: "KEN",
+  TR: "TUR",
+  PL: "POL",
+  CZ: "CZE",
+  HU: "HUN",
+  RO: "ROU",
+  UA: "UKR",
+  IL: "ISR",
+  AE: "ARE",
+  PK: "PAK",
+  BD: "BGD",
+  KZ: "KAZ",
+  UZ: "UZB",
+  QA: "QAT",
+  KW: "KWT",
+  OM: "OMN",
+  IR: "IRN",
+  MM: "MMR",
+  LA: "LAO",
+  KH: "KHM",
+  MO: "MAC",
+  MN: "MNG",
+  NP: "NPL",
+  LK: "LKA",
+};
+
+const KNOWN_ISO2_REGEX =
+  /^(VN|US|KR|CN|JP|FR|DE|GB|IT|ES|CA|AU|BR|IN|RU|MX|ID|NL|SA|CH|SE|NO|DK|FI|BE|AT|PT|GR|IE|NZ|SG|MY|TH|PH|HK|TW|AR|CL|CO|ZA|EG|NG|KE|TR|PL|CZ|HU|RO|UA|IL|AE|PK|BD|KZ|UZ|QA|KW|OM|IR|MM|LA|KH|MO|MN|NP|LK)$/i;
+
+/* ───── Name matching ───── */
 
 export function stripDiacritics(str: string): string {
   return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -195,173 +350,7 @@ export function getCharacterAmbiguityWarnings(value: string): AmbiguityWarning[]
   return warnings;
 }
 
-export const ISO3_FROM_ISO2: Record<string, string> = {
-  VN: "VNM",
-  US: "USA",
-  KR: "KOR",
-  CN: "CHN",
-  JP: "JPN",
-  FR: "FRA",
-  DE: "DEU",
-  GB: "GBR",
-  IT: "ITA",
-  ES: "ESP",
-  CA: "CAN",
-  AU: "AUS",
-  BR: "BRA",
-  IN: "IND",
-  RU: "RUS",
-  MX: "MEX",
-  ID: "IDN",
-  NL: "NLD",
-  SA: "SAU",
-  CH: "CHE",
-  SE: "SWE",
-  NO: "NOR",
-  DK: "DNK",
-  FI: "FIN",
-  BE: "BEL",
-  AT: "AUT",
-  PT: "PRT",
-  GR: "GRC",
-  IE: "IRL",
-  NZ: "NZL",
-  SG: "SGP",
-  MY: "MYS",
-  TH: "THA",
-  PH: "PHL",
-  HK: "HKG",
-  TW: "TWN",
-  AR: "ARG",
-  CL: "CHL",
-  CO: "COL",
-  ZA: "ZAF",
-  EG: "EGY",
-  NG: "NGA",
-  KE: "KEN",
-  TR: "TUR",
-  PL: "POL",
-  CZ: "CZE",
-  HU: "HUN",
-  RO: "ROU",
-  UA: "UKR",
-  IL: "ISR",
-  AE: "ARE",
-  PK: "PAK",
-  BD: "BGD",
-  KZ: "KAZ",
-  UZ: "UZB",
-  QA: "QAT",
-  KW: "KWT",
-  OM: "OMN",
-  IR: "IRN",
-  MM: "MMR",
-  LA: "LAO",
-  KH: "KHM",
-  MO: "MAC",
-  MN: "MNG",
-  NP: "NPL",
-  LK: "LKA",
-};
-
-const PASSPORT_FORMAT_EXAMPLES: Record<string, string> = {
-  GBR: "9 digits (e.g., 123456789)",
-  USA: "9 digits (e.g., 123456789)",
-  CHN: "1 letter + 8 digits (e.g., E12345678) or 1 letter + 7 digits",
-  JPN: "2 letters + 7 digits (e.g., AB1234567)",
-  KOR: "8 digits (e.g., 12345678)",
-  RUS: "9 digits (e.g., 123456789)",
-  ARE: "2 letters + 7 digits (e.g., AB1234567)",
-  VNM: "1 letter + 7 digits (e.g., A1234567)",
-  IND: "1 letter + 7 digits (e.g., A1234567)",
-  FRA: "2 digits + 2 letters + 5 digits (e.g., 12AB34567)",
-  DEU: "1 letter + 8 digits (e.g., A12345678)",
-  ITA: "2 letters + 7 digits (e.g., AB1234567)",
-  ESP: "3 letters + 6 digits (e.g., ABC123456)",
-  BRA: "2 letters + 6 digits (e.g., AB123456)",
-  CAN: "2 letters + 6 digits (e.g., AB123456)",
-  AUS: "1 letter + 8 digits (e.g., A12345678)",
-  ZAF: "8 digits (e.g., 12345678)",
-  SGP: "1 letter + 7 digits (e.g., A1234567)",
-  MYS: "1 letter + 8 digits (e.g., A12345678)",
-  THA: "9 digits (e.g., 123456789)",
-  PHL: "2 letters + 7 digits (e.g., AB1234567)",
-  IDN: "8 digits (e.g., 12345678)",
-  MEX: "8 digits (e.g., 12345678) or 1 letter + 7 digits",
-  TUR: "1 letter + 8 digits (e.g., A12345678)",
-  NLD: "2 letters + 7 digits (e.g., AB1234567)",
-  SAU: "1 letter + 8 digits (e.g., A12345678)",
-  CHE: "8 digits (e.g., 12345678)",
-  SWE: "8 digits (e.g., 12345678)",
-  NOR: "8 digits (e.g., 12345678)",
-  DNK: "7 digits (e.g., 1234567)",
-  FIN: "2 letters + 7 digits (e.g., AB1234567)",
-  BEL: "2 letters + 6 digits (e.g., AB123456)",
-  AUT: "8 digits (e.g., 12345678)",
-  PRT: "8 digits (e.g., 12345678)",
-  GRC: "2 letters + 7 digits (e.g., AB1234567)",
-  IRL: "9 digits (e.g., 123456789)",
-  NZL: "2 letters + 6 digits (e.g., AB123456)",
-  POL: "9 digits (e.g., 123456789)",
-  CZE: "8 digits (e.g., 12345678)",
-  HUN: "8 digits (e.g., 12345678)",
-  ROU: "8 digits (e.g., 12345678)",
-  UKR: "9 digits (e.g., 123456789)",
-  ISR: "8 digits (e.g., 12345678)",
-  PAK: "2 letters + 7 digits (e.g., AB1234567)",
-  BGD: "1 letter + 8 digits (e.g., A12345678)",
-  EGY: "9 digits (e.g., 123456789)",
-  NGA: "8 digits (e.g., 12345678)",
-  KEN: "8 digits (e.g., 12345678)",
-  ARG: "3 letters + 6 digits (e.g., ABC123456)",
-  CHL: "8 digits (e.g., 12345678)",
-  COL: "10 digits (e.g., 1234567890)",
-  HKG: "2 letters + 7 digits (e.g., AB1234567)",
-  TWN: "9 digits (e.g., 123456789)",
-  MMR: "1 letter + 8 digits (e.g., A12345678)",
-  LAO: "2 letters + 7 digits (e.g., AB1234567)",
-  KHM: "9 digits (e.g., 123456789)",
-};
-
-function describePassportPattern(iso3: string, _pattern?: RegExp): string | undefined {
-  return PASSPORT_FORMAT_EXAMPLES[iso3];
-}
-
-export function validatePassportForCountry(
-  passport: string,
-  nationality?: string,
-): { valid: boolean; message?: string } {
-  if (!nationality) {
-    const genericValid = /^[A-Za-z0-9]{5,20}$/.test(passport);
-    return {
-      valid: genericValid,
-      message: genericValid ? undefined : "Invalid passport format — expected 5-20 alphanumeric characters",
-    };
-  }
-  const iso3 = ISO3_FROM_ISO2[nationality.toUpperCase()] ?? nationality.toUpperCase();
-  const patterns = PASSPORT_PATTERNS[iso3];
-  if (!patterns) {
-    const genericValid = /^[A-Za-z0-9]{5,20}$/.test(passport);
-    return {
-      valid: genericValid,
-      message: genericValid ? undefined : "Invalid passport format — expected 5-20 alphanumeric characters",
-    };
-  }
-  const upper = passport.toUpperCase();
-  for (const pattern of patterns) {
-    if (pattern.test(upper)) {
-      return { valid: true };
-    }
-  }
-  const expectedFormat = patterns[0]?.source ?? "alphanumeric 5-20 chars";
-  const describePattern = describePassportPattern(iso3, patterns[0]);
-  return {
-    valid: false,
-    message: describePattern
-      ? `${iso3} passport numbers look like: ${describePattern}. Got: ${passport}`
-      : `${iso3} passport should match: ${expectedFormat}. Got: ${passport}`,
-  };
-}
+/* ───── Gender name sets ───── */
 
 const MASCULINE_NAMES = new Set([
   "john",
@@ -458,7 +447,6 @@ const MASCULINE_NAMES = new Set([
   "ho",
   "ngo",
   "dang",
-  "ngo",
 ]);
 
 const FEMININE_NAMES = new Set([
@@ -557,6 +545,46 @@ function guessNameGender(name: string): "M" | "F" | "ambiguous" {
   return "ambiguous";
 }
 
+/* ───── Passport validation ───── */
+
+export function validatePassportForCountry(
+  passport: string,
+  nationality?: string,
+): { valid: boolean; message?: string } {
+  if (!nationality) {
+    const genericValid = /^[A-Za-z0-9]{5,20}$/.test(passport);
+    return {
+      valid: genericValid,
+      message: genericValid ? undefined : "Invalid passport format — expected 5-20 alphanumeric characters",
+    };
+  }
+  const iso3 = ISO3_FROM_ISO2[nationality.toUpperCase()] ?? nationality.toUpperCase();
+  const patterns = PASSPORT_PATTERNS[iso3];
+  if (!patterns) {
+    const genericValid = /^[A-Za-z0-9]{5,20}$/.test(passport);
+    return {
+      valid: genericValid,
+      message: genericValid ? undefined : "Invalid passport format — expected 5-20 alphanumeric characters",
+    };
+  }
+  const upper = passport.toUpperCase();
+  for (const pattern of patterns) {
+    if (pattern.test(upper)) {
+      return { valid: true };
+    }
+  }
+  const expectedFormat = patterns[0]?.source ?? "alphanumeric 5-20 chars";
+  const describePattern = PASSPORT_FORMAT_EXAMPLES[iso3];
+  return {
+    valid: false,
+    message: describePattern
+      ? `${iso3} passport numbers look like: ${describePattern}. Got: ${passport}`
+      : `${iso3} passport should match: ${expectedFormat}. Got: ${passport}`,
+  };
+}
+
+/* ───── Date utilities ───── */
+
 export function getDaysUntilExpiry(dateString?: string): number | null {
   if (!dateString) return null;
   const parsed = new Date(dateString);
@@ -565,6 +593,13 @@ export function getDaysUntilExpiry(dateString?: string): number | null {
   const diff = parsed.getTime() - now.getTime();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
+
+function parseDateSafe(dateString: string): Date | null {
+  const parsed = new Date(dateString);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/* ───── Cross-field validation ───── */
 
 export function getCrossFieldIssues(guest: GuestRow): string[] {
   const issues: string[] = [];
@@ -588,19 +623,16 @@ export function getCrossFieldIssues(guest: GuestRow): string[] {
     }
   }
 
-  if (guest.dateOfBirth && guest.passportExpiryDate) {
-    const dob = new Date(guest.dateOfBirth);
-    const exp = new Date(guest.passportExpiryDate);
-    if (!isNaN(dob.getTime()) && !isNaN(exp.getTime())) {
-      if (exp <= dob) {
-        issues.push("Passport expiry date is before or same as date of birth — data may be swapped");
-      }
-      if (guest.gender !== "UNKNOWN") {
-        const ageAtExpiry = exp.getFullYear() - dob.getFullYear();
-        if (ageAtExpiry > 100) {
-          issues.push(`Age at passport expiry would be ${ageAtExpiry} — unusual, check date values`);
-        }
-      }
+  const dob = guest.dateOfBirth ? parseDateSafe(guest.dateOfBirth) : null;
+  const exp = guest.passportExpiryDate ? parseDateSafe(guest.passportExpiryDate) : null;
+
+  if (dob && exp) {
+    if (exp <= dob) {
+      issues.push("Passport expiry date is before or same as date of birth — data may be swapped");
+    }
+    const ageAtExpiry = exp.getFullYear() - dob.getFullYear();
+    if (ageAtExpiry > 100) {
+      issues.push(`Age at passport expiry would be ${ageAtExpiry} — unusual, check date values`);
     }
   }
 
@@ -620,40 +652,32 @@ export function getCrossFieldIssues(guest: GuestRow): string[] {
     }
   }
 
-  if (guest.dateOfBirth && guest.passportExpiryDate) {
-    const dob = new Date(guest.dateOfBirth);
-    const exp = new Date(guest.passportExpiryDate);
-    if (!isNaN(dob.getTime()) && !isNaN(exp.getTime())) {
-      const diffMs = exp.getTime() - dob.getTime();
-      const diffYears = diffMs / (1000 * 60 * 60 * 24 * 365.25);
-      if (diffYears > 100 || diffYears < 15) {
-        issues.push(
-          `Document validity period (${Math.round(diffYears)} years) seems unusual — verify dates are not swapped between DOB and expiry`,
-        );
-      }
+  if (dob && exp) {
+    const diffYears = (exp.getTime() - dob.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    if (diffYears > 100 || diffYears < 15) {
+      issues.push(
+        `Document validity period (${Math.round(diffYears)} years) seems unusual — verify dates are not swapped between DOB and expiry`,
+      );
     }
   }
 
   return issues;
 }
 
+/* ───── Accuracy recommendations ───── */
+
 export function getAccuracyRecommendations(guest: GuestRow): AccuracyRecommendation[] {
   const recommendations: AccuracyRecommendation[] = [];
 
   if (guest.fullName && guest.fullName.length < 3) {
-    if (guest.fullName.length < 2) {
-      recommendations.push({
-        field: "fullName",
-        priority: "high",
-        message: `Name is only ${guest.fullName.length} character — likely truncated or OCR failed. Check the original document image.`,
-      });
-    } else {
-      recommendations.push({
-        field: "fullName",
-        priority: "high",
-        message: `Name is ${guest.fullName.length} characters — check for truncation. Common with short Vietnamese or Chinese names, verify against document.`,
-      });
-    }
+    recommendations.push({
+      field: "fullName",
+      priority: "high",
+      message:
+        guest.fullName.length < 2
+          ? `Name is only ${guest.fullName.length} character — likely truncated or OCR failed. Check the original document image.`
+          : `Name is ${guest.fullName.length} characters — check for truncation. Common with short Vietnamese or Chinese names, verify against document.`,
+    });
   }
 
   if (guest.fullName) {
@@ -690,11 +714,7 @@ export function getAccuracyRecommendations(guest: GuestRow): AccuracyRecommendat
     if (guest.nationality) {
       const valid = validatePassportForCountry(guest.passportNumber, guest.nationality);
       if (!valid.valid && valid.message) {
-        recommendations.push({
-          field: "passportNumber",
-          priority: "high",
-          message: valid.message,
-        });
+        recommendations.push({ field: "passportNumber", priority: "high", message: valid.message });
       }
     }
     if (/^0+$/.test(guest.passportNumber)) {
@@ -704,7 +724,7 @@ export function getAccuracyRecommendations(guest: GuestRow): AccuracyRecommendat
         message: `Passport number is all zeros ("${guest.passportNumber}") — this appears to be a default/placeholder value, not a real passport number.`,
       });
     }
-    if (guest.passportNumber && guest.passportNumber.length < 6) {
+    if (guest.passportNumber.length < 6) {
       recommendations.push({
         field: "passportNumber",
         priority: "medium",
@@ -728,68 +748,13 @@ export function getAccuracyRecommendations(guest: GuestRow): AccuracyRecommendat
   }
 
   if (guest.dateOfBirth) {
-    const dateStr = guest.dateOfBirth;
-    const parsed = new Date(dateStr);
-
-    if (!isNaN(parsed.getTime())) {
-      const now = new Date();
-      const age = now.getFullYear() - parsed.getFullYear();
-      if (age > 100) {
-        recommendations.push({
-          field: "dateOfBirth",
-          priority: "high",
-          message: `Age (${age}) from date of birth (${dateStr}) seems unusually high — verify date is not swapped with expiry date. Expected format: DD/MM/YYYY or YYYY-MM-DD.`,
-        });
-      } else if (age < 1) {
-        recommendations.push({
-          field: "dateOfBirth",
-          priority: "high",
-          message: `Date of birth (${dateStr}) indicates an infant (age < 1) — verify correctness, or check if date format is wrong (e.g., MM/DD swapped with DD/MM).`,
-        });
-      }
-    } else {
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
-        const parts = dateStr.split("/");
-        const maybeDd = parseInt(parts[0] ?? "0", 10);
-        const maybeMm = parseInt(parts[1] ?? "0", 10);
-        if (maybeDd > 12 && maybeMm <= 12) {
-          recommendations.push({
-            field: "dateOfBirth",
-            priority: "medium",
-            message: `Date "${dateStr}" appears to be in DD/MM/YYYY format (day=${maybeDd}, month=${maybeMm}). Could be MM/DD/YYYY — verify against document.`,
-          });
-        } else if (maybeMm > 12 && maybeDd <= 12) {
-          recommendations.push({
-            field: "dateOfBirth",
-            priority: "medium",
-            message: `Date "${dateStr}" appears to be in MM/DD/YYYY format (month=${maybeMm} is invalid, day=${maybeDd}). Try DD/MM/YYYY format.`,
-          });
-        }
-      } else {
-        recommendations.push({
-          field: "dateOfBirth",
-          priority: "high",
-          message: `Date of birth "${dateStr}" could not be parsed. Expected formats: YYYY-MM-DD, DD/MM/YYYY, or MM/DD/YYYY.`,
-        });
-      }
-    }
+    const dateRec = getDateOfBirthRecommendation(guest.dateOfBirth);
+    if (dateRec) recommendations.push(dateRec);
   }
 
   if (guest.passportExpiryDate) {
-    const days = getDaysUntilExpiry(guest.passportExpiryDate);
-    if (days !== null && days >= 0 && days < 90) {
-      recommendations.push({
-        field: "passportExpiryDate",
-        priority: "high",
-        message: `Passport expires in ${days} day${days === 1 ? "" : "s"} — document may not be valid for stay duration.`,
-      });
-    } else if (days !== null && days < 0) {
-      recommendations.push({
-        field: "passportExpiryDate",
-        priority: "high",
-        message: `Passport expired ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago — document is no longer valid.`,
-      });
-    }
+    const expRec = getExpiryRecommendation(guest.passportExpiryDate);
+    if (expRec) recommendations.push(expRec);
   }
 
   if (guest.nationality && guest.nationality.length === 2) {
@@ -803,15 +768,7 @@ export function getAccuracyRecommendations(guest: GuestRow): AccuracyRecommendat
 
   const crossField = getCrossFieldIssues(guest);
   for (const issue of crossField) {
-    const field = issue.includes("passport")
-      ? "passportNumber"
-      : issue.includes("gender") || issue.includes("male") || issue.includes("female")
-        ? "gender"
-        : issue.includes("DOB") || issue.includes("date of birth") || issue.includes("d.o.b.")
-          ? "dateOfBirth"
-          : issue.includes("Nationality")
-            ? "nationality"
-            : "cross-field";
+    const field = classifyIssueField(issue);
     const existing = recommendations.find((r) => r.message === issue);
     if (!existing) {
       recommendations.push({ field, priority: "high", message: issue });
@@ -821,6 +778,85 @@ export function getAccuracyRecommendations(guest: GuestRow): AccuracyRecommendat
   return recommendations;
 }
 
+function getDateOfBirthRecommendation(dateStr: string): AccuracyRecommendation | undefined {
+  const parsed = new Date(dateStr);
+
+  if (!isNaN(parsed.getTime())) {
+    const now = new Date();
+    const age = now.getFullYear() - parsed.getFullYear();
+    if (age > 100) {
+      return {
+        field: "dateOfBirth",
+        priority: "high",
+        message: `Age (${age}) from date of birth (${dateStr}) seems unusually high — verify date is not swapped with expiry date. Expected format: DD/MM/YYYY or YYYY-MM-DD.`,
+      };
+    }
+    if (age < 1) {
+      return {
+        field: "dateOfBirth",
+        priority: "high",
+        message: `Date of birth (${dateStr}) indicates an infant (age < 1) — verify correctness, or check if date format is wrong (e.g., MM/DD swapped with DD/MM).`,
+      };
+    }
+    return undefined;
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+    const parts = dateStr.split("/");
+    const maybeDd = parseInt(parts[0] ?? "0", 10);
+    const maybeMm = parseInt(parts[1] ?? "0", 10);
+    if (maybeDd > 12 && maybeMm <= 12) {
+      return {
+        field: "dateOfBirth",
+        priority: "medium",
+        message: `Date "${dateStr}" appears to be in DD/MM/YYYY format (day=${maybeDd}, month=${maybeMm}). Could be MM/DD/YYYY — verify against document.`,
+      };
+    }
+    if (maybeMm > 12 && maybeDd <= 12) {
+      return {
+        field: "dateOfBirth",
+        priority: "medium",
+        message: `Date "${dateStr}" appears to be in MM/DD/YYYY format (month=${maybeMm} is invalid, day=${maybeDd}). Try DD/MM/YYYY format.`,
+      };
+    }
+  }
+
+  return {
+    field: "dateOfBirth",
+    priority: "high",
+    message: `Date of birth "${dateStr}" could not be parsed. Expected formats: YYYY-MM-DD, DD/MM/YYYY, or MM/DD/YYYY.`,
+  };
+}
+
+function getExpiryRecommendation(dateString: string): AccuracyRecommendation | undefined {
+  const days = getDaysUntilExpiry(dateString);
+  if (days !== null && days >= 0 && days < 90) {
+    return {
+      field: "passportExpiryDate",
+      priority: "high",
+      message: `Passport expires in ${days} day${days === 1 ? "" : "s"} — document may not be valid for stay duration.`,
+    };
+  }
+  if (days !== null && days < 0) {
+    return {
+      field: "passportExpiryDate",
+      priority: "high",
+      message: `Passport expired ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} ago — document is no longer valid.`,
+    };
+  }
+  return undefined;
+}
+
+function classifyIssueField(issue: string): string {
+  if (issue.includes("passport")) return "passportNumber";
+  if (issue.includes("gender") || issue.includes("male") || issue.includes("female")) return "gender";
+  if (issue.includes("DOB") || issue.includes("date of birth") || issue.includes("d.o.b.")) return "dateOfBirth";
+  if (issue.includes("Nationality")) return "nationality";
+  return "cross-field";
+}
+
+/* ───── Field quick fixes ───── */
+
 export function getFieldQuickFixes(guest: GuestRow, fieldName: string): QuickFix[] {
   const fixes: QuickFix[] = [];
   const value = String((guest as Record<string, unknown>)[fieldName] ?? "");
@@ -828,23 +864,6 @@ export function getFieldQuickFixes(guest: GuestRow, fieldName: string): QuickFix
   if (!value) return fixes;
 
   if (fieldName === "passportNumber" || fieldName === "idNumber") {
-    const ambiguous = getCharacterAmbiguityWarnings(value);
-    for (const warning of ambiguous) {
-      for (const suggestion of warning.suggestions) {
-        const original = warning.char;
-        const replacement = suggestion;
-        if (original !== replacement) {
-          const fixed = value.substring(0, warning.position) + replacement + value.substring(warning.position + 1);
-          fixes.push({
-            label: `Replace '${original}' with '${replacement}'`,
-            action: "replace",
-            value: fixed,
-            description: `Position ${warning.position + 1}: '${original}' → '${replacement}'`,
-          });
-        }
-      }
-    }
-
     if (/^0+$/.test(value)) {
       fixes.push({
         label: "Zero-filled value — check original document",
@@ -861,6 +880,23 @@ export function getFieldQuickFixes(guest: GuestRow, fieldName: string): QuickFix
           action: "review",
           description: validation.message ?? "Format does not match expected pattern",
         });
+      }
+    }
+
+    const ambiguous = getCharacterAmbiguityWarnings(value);
+    for (const warning of ambiguous) {
+      for (const suggestion of warning.suggestions) {
+        const original = warning.char;
+        const replacement = suggestion;
+        if (original !== replacement) {
+          const fixed = value.substring(0, warning.position) + replacement + value.substring(warning.position + 1);
+          fixes.push({
+            label: `Replace '${original}' with '${replacement}'`,
+            action: "replace",
+            value: fixed,
+            description: `Position ${warning.position + 1}: '${original}' → '${replacement}'`,
+          });
+        }
       }
     }
   }
@@ -886,41 +922,7 @@ export function getFieldQuickFixes(guest: GuestRow, fieldName: string): QuickFix
   }
 
   if (fieldName === "dateOfBirth") {
-    const parsed = new Date(value);
-    if (!isNaN(parsed.getTime())) {
-      const now = new Date();
-      const age = now.getFullYear() - parsed.getFullYear();
-      if (age < 1 || age > 120) {
-        fixes.push({
-          label: "Verify date in original document",
-          action: "review",
-          description:
-            age < 1
-              ? "Date of birth indicates age < 1 — may be wrong"
-              : `Age ${age} is outside expected range — may be swapped with expiry date`,
-        });
-      }
-    } else {
-      if (/^\d{8}$/.test(value)) {
-        const y = value.slice(0, 4);
-        const m = value.slice(4, 6);
-        const d = value.slice(6, 8);
-        fixes.push({
-          label: `Try formatted: ${d}/${m}/${y}`,
-          action: "replace",
-          value: `${d}/${m}/${y}`,
-          description: "Date appears to be in compact YYYYMMDD format",
-        });
-      } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
-        const parts = value.split("/");
-        fixes.push({
-          label: `Try YYYY-MM-DD: ${parts[2]}-${parts[1]}-${parts[0]}`,
-          action: "replace",
-          value: `${parts[2]}-${parts[1]}-${parts[0]}`,
-          description: "Date format may be DD/MM/YYYY — converting to YYYY-MM-DD",
-        });
-      }
-    }
+    fixes.push(...getDateQuickFixes(value));
   }
 
   if (fieldName === "gender" && value !== "M" && value !== "F" && value !== "UNKNOWN") {
@@ -946,6 +948,50 @@ export function getFieldQuickFixes(guest: GuestRow, fieldName: string): QuickFix
   return fixes.slice(0, 5);
 }
 
+function getDateQuickFixes(value: string): QuickFix[] {
+  const fixes: QuickFix[] = [];
+  const parsed = new Date(value);
+
+  if (!isNaN(parsed.getTime())) {
+    const now = new Date();
+    const age = now.getFullYear() - parsed.getFullYear();
+    if (age < 1 || age > 120) {
+      fixes.push({
+        label: "Verify date in original document",
+        action: "review",
+        description:
+          age < 1
+            ? "Date of birth indicates age < 1 — may be wrong"
+            : `Age ${age} is outside expected range — may be swapped with expiry date`,
+      });
+    }
+  } else {
+    if (/^\d{8}$/.test(value)) {
+      const y = value.slice(0, 4);
+      const m = value.slice(4, 6);
+      const d = value.slice(6, 8);
+      fixes.push({
+        label: `Try formatted: ${d}/${m}/${y}`,
+        action: "replace",
+        value: `${d}/${m}/${y}`,
+        description: "Date appears to be in compact YYYYMMDD format",
+      });
+    } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+      const parts = value.split("/");
+      fixes.push({
+        label: `Try YYYY-MM-DD: ${parts[2]}-${parts[1]}-${parts[0]}`,
+        action: "replace",
+        value: `${parts[2]}-${parts[1]}-${parts[0]}`,
+        description: "Date format may be DD/MM/YYYY — converting to YYYY-MM-DD",
+      });
+    }
+  }
+
+  return fixes;
+}
+
+/* ───── Aggregate accuracy ───── */
+
 export function getAggregateAccuracy(guest: GuestRow): AggregateAccuracy {
   const perField = getFieldAccuracyInfo(guest);
   const crossFieldIssues = getCrossFieldIssues(guest);
@@ -965,6 +1011,8 @@ export function getAggregateAccuracy(guest: GuestRow): AggregateAccuracy {
 
   return { overallScore, overallLevel, perField, recommendations };
 }
+
+/* ───── Transform validation ───── */
 
 export function applyTransformsWithValidation(
   value: string,
@@ -988,23 +1036,7 @@ export function applyTransformsWithValidation(
   return { result: current, valid: true };
 }
 
-export type SafetyCheckResult = {
-  passed: boolean;
-  checks: SafetyCheck[];
-};
-
-export type SafetyCheck = {
-  name: string;
-  passed: boolean;
-  message?: string;
-};
-
-export type AccuracyInfo = {
-  field: string;
-  level: ConfidenceLevel;
-  score: number;
-  issues: string[];
-};
+/* ───── Safety checks ───── */
 
 export function checkGuestRow(guest: GuestRow, requireConfirmation?: boolean): SafetyCheckResult {
   const checks: SafetyCheck[] = [];
@@ -1031,7 +1063,6 @@ export function checkGuestRow(guest: GuestRow, requireConfirmation?: boolean): S
 
 export function checkConfidence(guest: GuestRow): SafetyCheckResult {
   const checks: SafetyCheck[] = [];
-
   const score = guest.confidenceScore ?? 0;
   const level = guest.confidenceLevel ?? "LOW";
 
@@ -1305,6 +1336,8 @@ function checkRequiredFields(guest: GuestRow): boolean {
   return true;
 }
 
+/* ───── Field accuracy scoring ───── */
+
 export function getFieldAccuracyInfo(guest: GuestRow): AccuracyInfo[] {
   const accuracies: AccuracyInfo[] = [];
 
@@ -1378,7 +1411,7 @@ function applyFieldConfidence(guest: GuestRow, fieldName: string, accuracy: Accu
     issues.push(`OCR confidence: ${(ocrConfidence * 100).toFixed(0)}%`);
   }
   if (ocrConfidence < 0.7) {
-    issues.push(`Low OCR confidence for this field — verify against document`);
+    issues.push("Low OCR confidence for this field — verify against document");
   }
 
   return {
@@ -1406,7 +1439,7 @@ function getNameAccuracy(name: string, fieldName: string = "fullName"): Accuracy
     score = Math.min(score, 0.3);
     issues.push("Name too short");
   } else if (name.length < 3) {
-    score = Math.min(score, 0.6);
+    score = Math.min(score, 0.7);
     issues.push("Name is very short — check for truncation");
   }
 
@@ -1576,9 +1609,7 @@ function getNationalityAccuracy(nationality: string): AccuracyInfo {
     score = 0.4;
     issues.push("Unexpected nationality format (expected 2 or 3 letter code)");
   } else if (validIso2) {
-    const knownIso2 =
-      /^(VN|US|KR|CN|JP|FR|DE|GB|IT|ES|CA|AU|BR|IN|RU|MX|ID|NL|SA|CH|SE|NO|DK|FI|BE|AT|PT|GR|IE|NZ|SG|MY|TH|PH|HK|TW|AR|CL|CO|ZA|EG|NG|KE|TR|PL|CZ|HU|RO|UA|IL|AE|PK|BD|KZ|UZ|QA|KW|OM|IR|MM|LA|KH|MO|MN|NP|LK)$/i;
-    const validCode = knownIso2.test(nationality);
+    const validCode = KNOWN_ISO2_REGEX.test(nationality);
     if (!validCode) {
       score = 0.7;
       issues.push(`Unrecognized 2-letter country code: ${nationality}`);

@@ -42,7 +42,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "lefthook"
+      "lefthook",
+      "tesseract.js"
     ]
   }
 }

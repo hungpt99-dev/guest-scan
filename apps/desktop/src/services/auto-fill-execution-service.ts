@@ -5,6 +5,7 @@ import type { SafetyRule, TargetSystemType } from "@guestfill/shared";
 import { logger } from "../lib/logger";
 import { DEFAULT_FIELD_DELAY_MS } from "../config/constants";
 import { isTauri } from "../lib/isTauri";
+import { invokeIpc } from "../infra/ipc";
 
 export type FillFieldStatus = "FILLED" | "SKIPPED" | "FAILED";
 
@@ -496,8 +497,7 @@ class DefaultFillExecutor implements FillExecutor {
     if (isTauri()) {
       const selector = target?.selector ?? `[name="${formField}"]`;
       try {
-        const { invoke } = await import("@tauri-apps/api/tauri");
-        await invoke("fill_web_field", { selector, value });
+        await invokeIpc("fill_web_field", { selector, value });
         return;
       } catch {
         /* fall through to clipboard fallback */
@@ -511,8 +511,7 @@ class DefaultFillExecutor implements FillExecutor {
       const automationId = target?.automationId;
       if (automationId) {
         try {
-          const { invoke } = await import("@tauri-apps/api/tauri");
-          await invoke("fill_desktop_field", { automationId, value });
+          await invokeIpc("fill_desktop_field", { automationId, value });
           return;
         } catch {
           /* fall through to clipboard fallback */
@@ -529,8 +528,7 @@ class DefaultFillExecutor implements FillExecutor {
   async focusTargetApp(windowTitle?: string, processName?: string): Promise<void> {
     if (!isTauri()) return;
     try {
-      const { invoke } = await import("@tauri-apps/api/tauri");
-      await invoke("focus_app_window", { windowTitle, processName });
+      await invokeIpc("focus_app_window", { windowTitle, processName });
     } catch (error) {
       logger.warn("AutoFillExecutionService: focusTargetApp failed", error);
     }

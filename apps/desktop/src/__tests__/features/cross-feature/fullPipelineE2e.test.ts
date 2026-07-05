@@ -33,7 +33,7 @@ function createSampleGuest(overrides?: Partial<GuestRow>): GuestRow {
     fullName: "Jane Smith",
     surname: "Smith",
     givenName: "Jane",
-    passportNumber: "AB123456",
+    passportNumber: "A3434343",
     idNumber: "",
     nationality: "VN",
     dateOfBirth: "1995-12-25",
@@ -184,7 +184,7 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
     it("provides per-field accuracy levels for UI rendering", () => {
       const guest = createSampleGuest({
         fullName: "Jane Smith",
-        passportNumber: "AB123456",
+        passportNumber: "A3434343",
         confidenceScore: 0.95,
         confidenceLevel: "HIGH",
       });
@@ -278,7 +278,7 @@ describe("Full Pipeline E2E: OCR -> Import -> Validate -> Transform -> Fill -> C
     it("extracts individual field values", () => {
       const guest = createSampleGuest();
       expect(getFieldValue(guest, "fullName")).toBe("Jane Smith");
-      expect(getFieldValue(guest, "passportNumber")).toBe("AB123456");
+      expect(getFieldValue(guest, "passportNumber")).toBe("A3434343");
       expect(getFieldValue(guest, "nationality")).toBe("VN");
       expect(getFieldValue(guest, "dateOfBirth")).toBe("1995-12-25");
     });

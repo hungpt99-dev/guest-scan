@@ -347,6 +347,7 @@ function parseMrzDate(raw: string, centuryBreak: number): string {
   if (!raw || raw.replace(/</g, "").length < 6) return "";
   const clean = raw.replace(/</g, "0");
   if (clean.length !== 6) return "";
+  if (!/^\d{6}$/.test(clean)) return "";
 
   const yearTwo = parseInt(clean.slice(0, 2), 10);
   const month = parseInt(clean.slice(2, 4), 10);

@@ -24,7 +24,9 @@ class BrowserFileDialogProvider implements FileDialogProvider {
       input.multiple = true;
       input.accept = ACCEPTED_OCR_FILE_TYPES;
       input.onchange = () => {
-        const files = Array.from(input.files || []).map((f) => ("path" in f ? (f as any).path : f.name));
+        const files = Array.from(input.files || []).map((f) =>
+          "path" in f ? (f as File & { path: string }).path : f.name,
+        );
         resolve(files);
       };
       input.onerror = () => reject(new Error("File selection was cancelled or failed."));

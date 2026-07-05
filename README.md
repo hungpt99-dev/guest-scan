@@ -117,6 +117,47 @@ GuestFill operates a **dual OCR pipeline** architecture:
 
 The **auto-fill system** uses a transform engine, safety engine with per-field accuracy scoring, and a copy assistant with keyboard-driven navigation to help hotel staff fill property management system forms efficiently.
 
+## OCR Feature
+
+### Provider Selection
+
+Guest Fill offers two OCR providers for passport/ID document extraction:
+
+| Provider      | Type                                       | When to Use                                              |
+| ------------- | ------------------------------------------ | -------------------------------------------------------- |
+| **Local OCR** | Free, offline (Tesseract.js + MRZ parsing) | Demo, testing, offline mode, privacy-sensitive scenarios |
+| **Azure OCR** | Production (Azure Document Intelligence)   | Real passport/ID processing requiring high accuracy      |
+
+### Usage Flow
+
+1. Open the Guest Fill form
+2. Select OCR provider (Local or Azure) from the provider selector
+3. Upload or capture a passport/ID document image
+4. The app extracts guest information using the selected provider
+5. Review extracted data — low-confidence fields are highlighted
+6. Edit any incorrect fields manually
+7. Confirm and apply data to the guest form
+
+### Configuration
+
+**Local OCR:** No configuration needed. Runs entirely in-browser using Tesseract.js.
+
+**Azure OCR:** Requires Azure Document Intelligence credentials configured on the backend (Tauri/Rust). API keys are never exposed to the frontend. Configure via environment variables on the server:
+
+- `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` — Azure endpoint URL
+- `AZURE_DOCUMENT_INTELLIGENCE_API_KEY` — API key (stored in backend only)
+
+See [OCR Feature Design](docs/ocr-feature-design.md) and [OCR Privacy](docs/ocr-privacy.md) for details.
+
+### Privacy & Security
+
+- **Images are not stored persistently.** Temporary files are cleaned immediately after processing.
+- **Azure OCR requires explicit opt-in.** Local OCR is the default — no data leaves the device.
+- **API keys never reach the frontend.** Azure credentials live in the Rust backend only.
+- **Sensitive data is masked in logs.** Passport numbers, full names, and DOB are redacted before logging.
+- **Users can clear all extracted data** at any time via the UI.
+- **Users must review and confirm** extracted data before it is saved.
+
 ## Current Status
 
 Active development with **test suites** across 43 TypeScript test files and 28 Python test files:
@@ -132,6 +173,8 @@ Key docs available in the `docs/` directory:
 - [User Guide](docs/USER_GUIDE.md) — End-user workflow instructions
 - [Installation](docs/INSTALLATION.md) — Platform-specific installation
 - [Security](docs/SECURITY.md) — Security model and privacy considerations
+- [OCR Feature Design](docs/ocr-feature-design.md) — OCR architecture and provider abstraction
+- [OCR Privacy](docs/ocr-privacy.md) — OCR data handling, logging, and API key security
 - [Development](docs/DEVELOPMENT.md) — Development setup and conventions
 - [Tech Stack](docs/TECH_STACK.md) — Detailed technology overview
 - [Code Quality](docs/CODE_QUALITY.md) — Quality tooling and standards

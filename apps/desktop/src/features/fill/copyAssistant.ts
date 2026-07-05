@@ -1,5 +1,5 @@
 import type { GuestRow, FillEvent, ConfidenceLevel, FieldMapping } from "@guestfill/shared";
-import { DEFAULT_FIELD_ORDER } from "./fillConstants";
+import { DEFAULT_FIELD_ORDER, FILL_FIELD_LABELS } from "./fillConstants";
 import { saveFillEvent } from "./fillStore";
 import {
   getFieldAccuracyInfo,
@@ -10,6 +10,7 @@ import {
   getFieldQuickFixes,
   type QuickFix,
 } from "./safetyEngine";
+
 export type AccuracyCheckResult = {
   success: boolean;
   warning?: string;
@@ -20,37 +21,41 @@ export type AccuracyCheckResult = {
   quickFixes?: QuickFix[];
 };
 
+function buildFillEvent(
+  guest: GuestRow,
+  eventType: FillEvent["eventType"],
+  status: FillEvent["status"],
+  fieldName?: string,
+  message?: string,
+): FillEvent {
+  return {
+    id: crypto.randomUUID(),
+    sessionId: guest.sessionId,
+    guestRowId: guest.id,
+    eventType,
+    fieldName,
+    status,
+    message,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+async function copyToClipboard(value: string): Promise<void> {
+  const { writeText } = await import("@tauri-apps/api/clipboard");
+  await writeText(value);
+}
+
 export async function copyField(guest: GuestRow, fieldName: string): Promise<boolean> {
   const value = (guest as Record<string, unknown>)[fieldName];
   if (value === undefined || value === null || value === "") {
     return false;
   }
   try {
-    const { writeText } = await import("@tauri-apps/api/clipboard");
-    await writeText(String(value));
-    const event: FillEvent = {
-      id: crypto.randomUUID(),
-      sessionId: guest.sessionId,
-      guestRowId: guest.id,
-      eventType: "FIELD_COPIED",
-      fieldName,
-      status: "SUCCESS",
-      createdAt: new Date().toISOString(),
-    };
-    await saveFillEvent(event);
+    await copyToClipboard(String(value));
+    await saveFillEvent(buildFillEvent(guest, "FIELD_COPIED", "SUCCESS", fieldName));
     return true;
   } catch {
-    const event: FillEvent = {
-      id: crypto.randomUUID(),
-      sessionId: guest.sessionId,
-      guestRowId: guest.id,
-      eventType: "FILL_FAILED",
-      fieldName,
-      status: "FAILURE",
-      message: "CLIPBOARD_COPY_FAILED",
-      createdAt: new Date().toISOString(),
-    };
-    await saveFillEvent(event);
+    await saveFillEvent(buildFillEvent(guest, "FILL_FAILED", "FAILURE", fieldName, "CLIPBOARD_COPY_FAILED"));
     return false;
   }
 }
@@ -104,31 +109,11 @@ export async function copyFieldWithAccuracyCheck(
   }
 
   try {
-    const { writeText } = await import("@tauri-apps/api/clipboard");
-    await writeText(String(value));
-    const event: FillEvent = {
-      id: crypto.randomUUID(),
-      sessionId: guest.sessionId,
-      guestRowId: guest.id,
-      eventType: "FIELD_COPIED",
-      fieldName,
-      status: "SUCCESS",
-      createdAt: new Date().toISOString(),
-    };
-    await saveFillEvent(event);
+    await copyToClipboard(String(value));
+    await saveFillEvent(buildFillEvent(guest, "FIELD_COPIED", "SUCCESS", fieldName));
     return { copied: true, accuracy: check };
   } catch {
-    const event: FillEvent = {
-      id: crypto.randomUUID(),
-      sessionId: guest.sessionId,
-      guestRowId: guest.id,
-      eventType: "FILL_FAILED",
-      fieldName,
-      status: "FAILURE",
-      message: "CLIPBOARD_COPY_FAILED",
-      createdAt: new Date().toISOString(),
-    };
-    await saveFillEvent(event);
+    await saveFillEvent(buildFillEvent(guest, "FILL_FAILED", "FAILURE", fieldName, "CLIPBOARD_COPY_FAILED"));
     return { copied: false, accuracy: check };
   }
 }
@@ -209,7 +194,7 @@ export function getFieldValue(guest: GuestRow, fieldName: string): string {
 
 export function getFieldsInOrder(
   guest: GuestRow,
-  fieldOrder?: string[],
+  fieldOrder?: readonly string[],
 ): Array<{
   key: string;
   label: string;
@@ -219,26 +204,6 @@ export function getFieldsInOrder(
   ocrConfidence?: number;
 }> {
   const order = fieldOrder ?? DEFAULT_FIELD_ORDER;
-  const labelMap: Record<string, string> = {
-    fullName: "Full Name",
-    surname: "Surname",
-    givenName: "Given Name",
-    passportNumber: "Passport Number",
-    idNumber: "ID Number",
-    nationality: "Nationality",
-    dateOfBirth: "Date of Birth",
-    gender: "Gender",
-    passportExpiryDate: "Passport Expiry Date",
-    idExpiryDate: "ID Expiry Date",
-    issuingCountry: "Issuing Country",
-    issuingAuthority: "Issuing Authority",
-    documentType: "Document Type",
-    roomNumber: "Room Number",
-    arrivalDate: "Arrival Date",
-    departureDate: "Departure Date",
-    reservationCode: "Reservation Code",
-    note: "Note",
-  };
   const accuracies = getFieldAccuracyInfo(guest);
   const accuracyMap = new Map(
     accuracies.map((a) => [
@@ -252,7 +217,7 @@ export function getFieldsInOrder(
       const acc = accuracyMap.get(key);
       return {
         key,
-        label: labelMap[key] ?? key,
+        label: FILL_FIELD_LABELS[key] ?? key,
         value: getFieldValue(guest, key),
         accuracyLevel: acc?.level ?? "HIGH",
         accuracyScore: acc?.score ?? 1.0,
@@ -307,33 +272,12 @@ export async function copyAllHighConfidenceFields(guest: GuestRow): Promise<Batc
     }
 
     try {
-      const { writeText } = await import("@tauri-apps/api/clipboard");
-      await writeText(String(value));
+      await copyToClipboard(String(value));
       copied.push(key);
-
-      const event: FillEvent = {
-        id: crypto.randomUUID(),
-        sessionId: guest.sessionId,
-        guestRowId: guest.id,
-        eventType: "FIELD_COPIED",
-        fieldName: key,
-        status: "SUCCESS",
-        createdAt: new Date().toISOString(),
-      };
-      await saveFillEvent(event);
+      await saveFillEvent(buildFillEvent(guest, "FIELD_COPIED", "SUCCESS", key));
     } catch {
       failed.push(key);
-      const event: FillEvent = {
-        id: crypto.randomUUID(),
-        sessionId: guest.sessionId,
-        guestRowId: guest.id,
-        eventType: "FILL_FAILED",
-        fieldName: key,
-        status: "FAILURE",
-        message: "CLIPBOARD_COPY_FAILED",
-        createdAt: new Date().toISOString(),
-      };
-      await saveFillEvent(event);
+      await saveFillEvent(buildFillEvent(guest, "FILL_FAILED", "FAILURE", key, "CLIPBOARD_COPY_FAILED"));
     }
   }
 
@@ -347,34 +291,16 @@ export function getBatchCopyPreview(guest: GuestRow): {
   totalFields: number;
 } {
   const fields = getFieldsInOrder(guest);
-  const labelMap: Record<string, string> = {
-    fullName: "Full Name",
-    surname: "Surname",
-    givenName: "Given Name",
-    passportNumber: "Passport Number",
-    idNumber: "ID Number",
-    nationality: "Nationality",
-    dateOfBirth: "Date of Birth",
-    gender: "Gender",
-    passportExpiryDate: "Passport Expiry Date",
-    idExpiryDate: "ID Expiry Date",
-    issuingCountry: "Issuing Country",
-    roomNumber: "Room Number",
-    arrivalDate: "Arrival Date",
-    departureDate: "Departure Date",
-    reservationCode: "Reservation Code",
-    note: "Note",
-  };
 
   const highConfidence = fields
     .filter((f) => f.accuracyLevel === "HIGH" && f.value !== "")
-    .map((f) => ({ key: f.key, label: labelMap[f.key] ?? f.key }));
+    .map((f) => ({ key: f.key, label: FILL_FIELD_LABELS[f.key] ?? f.key }));
   const mediumConfidence = fields
     .filter((f) => f.accuracyLevel === "MEDIUM" && f.value !== "")
-    .map((f) => ({ key: f.key, label: labelMap[f.key] ?? f.key }));
+    .map((f) => ({ key: f.key, label: FILL_FIELD_LABELS[f.key] ?? f.key }));
   const lowConfidence = fields
     .filter((f) => f.accuracyLevel === "LOW" && f.value !== "")
-    .map((f) => ({ key: f.key, label: labelMap[f.key] ?? f.key }));
+    .map((f) => ({ key: f.key, label: FILL_FIELD_LABELS[f.key] ?? f.key }));
 
   return {
     highConfidence,

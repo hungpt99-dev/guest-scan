@@ -1,3 +1,28 @@
+import type { FillFieldMeta } from "./fillTypes";
+
+export const GUEST_FIELDS: FillFieldMeta[] = [
+  { key: "fullName", label: "Full Name", placeholder: "e.g. Smith John", required: true },
+  { key: "firstName", label: "First Name", placeholder: "e.g. John" },
+  { key: "lastName", label: "Last Name", placeholder: "e.g. Smith" },
+  { key: "dateOfBirth", label: "Date of Birth", placeholder: "YYYY-MM-DD", type: "date" },
+  { key: "gender", label: "Gender", placeholder: "M / F / X" },
+  { key: "nationality", label: "Nationality", placeholder: "e.g. VNM, GBR" },
+  { key: "passportNumber", label: "Passport Number", placeholder: "e.g. AB1234567", required: true },
+  { key: "idNumber", label: "ID Number", placeholder: "e.g. ID card number" },
+  { key: "documentType", label: "Document Type", placeholder: "PASSPORT / ID_CARD" },
+  { key: "issueDate", label: "Issue Date", placeholder: "YYYY-MM-DD", type: "date" },
+  { key: "expiryDate", label: "Expiry Date", placeholder: "YYYY-MM-DD", type: "date" },
+  { key: "issuingCountry", label: "Issuing Country", placeholder: "e.g. VNM" },
+  { key: "mrzCode", label: "MRZ / Passport Code", placeholder: "Machine-readable zone text" },
+  { key: "address", label: "Address", placeholder: "Full address if available" },
+];
+
+export const GUEST_FIELD_KEYS: readonly string[] = GUEST_FIELDS.map((f) => f.key);
+
+export const REQUIRED_GUEST_FIELDS: readonly string[] = GUEST_FIELDS.filter((f) => f.required).map((f) => f.key);
+
+export const FIELD_LABEL_MAP: Record<string, string> = Object.fromEntries(GUEST_FIELDS.map((f) => [f.key, f.label]));
+
 export const FILL_FIELDS = [
   { key: "fullName", label: "Full Name" },
   { key: "passportNumber", label: "Passport Number" },
@@ -14,7 +39,28 @@ export const FILL_FIELDS = [
   { key: "note", label: "Note" },
 ] as const;
 
-export const DEFAULT_FIELD_ORDER = FILL_FIELDS.map((f) => f.key);
+export const DEFAULT_FIELD_ORDER = FILL_FIELDS.map((f) => f.key) as readonly string[];
+
+export const FILL_FIELD_LABELS: Record<string, string> = {
+  fullName: "Full Name",
+  surname: "Surname",
+  givenName: "Given Name",
+  passportNumber: "Passport Number",
+  idNumber: "ID Number",
+  nationality: "Nationality",
+  dateOfBirth: "Date of Birth",
+  gender: "Gender",
+  passportExpiryDate: "Passport Expiry Date",
+  idExpiryDate: "ID Expiry Date",
+  issuingCountry: "Issuing Country",
+  issuingAuthority: "Issuing Authority",
+  documentType: "Document Type",
+  roomNumber: "Room Number",
+  arrivalDate: "Arrival Date",
+  departureDate: "Departure Date",
+  reservationCode: "Reservation Code",
+  note: "Note",
+};
 
 export const DEFAULT_KEYBOARD_SHORTCUTS = {
   copyCurrentField: "Ctrl+Shift+C",
@@ -55,3 +101,5 @@ export const ERROR_CODES = {
   FIELD_ACCURACY_FAILED: "FIELD_ACCURACY_FAILED",
   CONFIDENCE_CHECK_FAILED: "CONFIDENCE_CHECK_FAILED",
 } as const;
+
+export type ErrorCode = keyof typeof ERROR_CODES;

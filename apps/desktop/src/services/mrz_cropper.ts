@@ -1,4 +1,5 @@
-import { isTauri, requireTauri } from "../lib/isTauri";
+import { isTauri } from "../lib/isTauri";
+import { invokeIpc } from "../infra/ipc";
 import { logger } from "../lib/logger";
 import type { ImageInput } from "./image_quality_service";
 import {
@@ -238,16 +239,12 @@ export function createMrzCropperService(): MrzCropperService {
 
 class TauriMrzCropperService implements MrzCropperService {
   async cropMrzZone(input: ImageInput): Promise<MrzCropResult> {
-    await requireTauri();
-
     logger.debug("TauriMrzCropperService: cropping MRZ zone", {
       imagePath: input.imagePath,
     });
 
     try {
-      const { invoke } = await import("@tauri-apps/api/tauri");
-
-      const raw = await invoke<{
+      const raw = await invokeIpc<{
         croppedPath: string;
         variants: Array<{
           name: string;
