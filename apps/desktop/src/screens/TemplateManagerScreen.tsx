@@ -19,16 +19,26 @@ export default function TemplateManagerScreen() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [importJson, setImportJson] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     getTemplates().then(setTemplates);
   }, []);
 
   const handleCreate = () => {
-    const name = prompt("Enter template name:");
+    setCreateName("");
+    setShowCreateForm(true);
+  };
+
+  const handleCreateConfirm = () => {
+    const name = createName.trim();
     if (!name) return;
     const template = createDefaultTemplate(name);
     setEditing(template);
+    setShowCreateForm(false);
+    setCreateName("");
   };
 
   const handleSave = async () => {
@@ -42,9 +52,14 @@ export default function TemplateManagerScreen() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this template?")) return;
-    await deleteTemplate(id);
+    setConfirmDeleteId(id);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!confirmDeleteId) return;
+    await deleteTemplate(confirmDeleteId);
     setTemplates(await getTemplates());
+    setConfirmDeleteId(null);
   };
 
   const handleExportJson = (template: TargetSystemTemplate) => {
@@ -99,6 +114,47 @@ export default function TemplateManagerScreen() {
 
       {error && <ErrorMessage message={error} onRetry={() => setError(null)} />}
       {successMsg && <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">{successMsg}</div>}
+
+      {showCreateForm && (
+        <Card title="Create Template">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Template Name</label>
+              <input
+                type="text"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCreateConfirm()}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="e.g. GuestForm Demo"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleCreateConfirm} disabled={!createName.trim()}>
+                Create
+              </Button>
+              <Button variant="secondary" onClick={() => setShowCreateForm(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {confirmDeleteId && (
+        <Card title="Confirm Delete">
+          <p className="mb-3 text-sm text-gray-600">Are you sure you want to delete this template?</p>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={handleDeleteConfirm}>
+              Delete
+            </Button>
+            <Button variant="ghost" onClick={() => setConfirmDeleteId(null)}>
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {editing && (
         <Card title={`Edit Template: ${editing.name}`}>

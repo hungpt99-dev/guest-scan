@@ -60,3 +60,10 @@ Thumbs.db
 .flowtask/
 
 temp/
+
+# Demo apps
+demo/GuestFormApp/
+demo/GuestFormApp.app/
+demo/GuestFormApp.Windows/bin/
+demo/GuestFormApp.Windows/obj/
+

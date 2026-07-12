@@ -3,6 +3,7 @@
 mod app_state;
 mod commands;
 mod error;
+mod platform;
 
 use app_state::AppState;
 use commands::{

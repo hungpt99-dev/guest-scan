@@ -27,6 +27,7 @@ import {
 import type { QuickFix } from "../features/fill/safetyEngine";
 import { DEFAULT_FIELD_ORDER, DEFAULT_KEYBOARD_SHORTCUTS } from "../features/fill/fillConstants";
 import type { GuestRow, FillEvent, ConfidenceLevel } from "@guestfill/shared";
+import { useDesktopAutoFill } from "../hooks/useDesktopAutoFill";
 
 type FieldItem = {
   key: string;
@@ -69,6 +70,17 @@ export default function FillAssistantScreen() {
   const [batchCopying, setBatchCopying] = useState(false);
   const [batchResult, setBatchResult] = useState<BatchCopyResult | null>(null);
   const [showBatchPreview, setShowBatchPreview] = useState(false);
+  const {
+    templates: desktopTemplates,
+    selectedTemplateId,
+    setSelectedTemplateId,
+    status: autoFillStatus,
+    fieldResults: autoFillResults,
+    error: autoFillError,
+    execute: executeAutoFill,
+    reset: resetAutoFill,
+    reloadTemplates: reloadDesktopTemplates,
+  } = useDesktopAutoFill();
 
   useEffect(() => {
     if (!guest) {
@@ -785,6 +797,120 @@ export default function FillAssistantScreen() {
                   {batchResult.skipped.length} skipped
                 </div>
               )}
+            </div>
+
+            <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-blue-900">Desktop Auto-Fill</h4>
+                {autoFillStatus === "success" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+                    All fields filled
+                  </span>
+                )}
+                {autoFillStatus === "partial" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
+                    Partial
+                  </span>
+                )}
+                {autoFillStatus === "failed" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
+                    Failed
+                  </span>
+                )}
+                {autoFillStatus === "running" && (
+                  <span className="inline-flex items-center gap-1 text-xs text-blue-600">
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                    Filling...
+                  </span>
+                )}
+              </div>
+
+              {desktopTemplates.length > 1 && (
+                <div className="mt-2">
+                  <label className="block text-xs font-medium text-blue-800">Template</label>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => {
+                      setSelectedTemplateId(e.target.value);
+                      resetAutoFill();
+                    }}
+                    className="mt-1 w-full rounded-md border border-blue-300 bg-white px-2 py-1.5 text-xs"
+                  >
+                    {desktopTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {desktopTemplates.length === 0 && (
+                <div className="mt-2">
+                  <p className="text-xs text-blue-700">
+                    No desktop templates found. Create one in{" "}
+                    <button
+                      className="underline font-medium hover:text-blue-900"
+                      onClick={() => navigate(ROUTES.TEMPLATES)}
+                    >
+                      Templates
+                    </button>{" "}
+                    with type "Desktop" and a Window Title Pattern matching your app.
+                  </p>
+                  <button
+                    className="mt-1 text-xs text-blue-500 underline hover:text-blue-700"
+                    onClick={reloadDesktopTemplates}
+                  >
+                    Refresh
+                  </button>
+                </div>
+              )}
+
+              {autoFillError && <p className="mt-2 text-xs text-red-600">{autoFillError}</p>}
+
+              {autoFillResults.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {autoFillResults.map((r) => (
+                    <div key={r.formField} className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-gray-700">{r.formField}</span>
+                      <span
+                        className={
+                          r.status === "FILLED"
+                            ? "text-green-600"
+                            : r.status === "FAILED"
+                              ? "text-red-500"
+                              : "text-gray-400"
+                        }
+                      >
+                        {r.status === "FILLED"
+                          ? "Filled"
+                          : r.status === "FAILED"
+                            ? (r.error ?? "Failed")
+                            : "Skipped (empty)"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-3 flex gap-2">
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (guest) {
+                      executeAutoFill(guest);
+                    }
+                  }}
+                  disabled={autoFillStatus === "running" || !guest || desktopTemplates.length === 0}
+                >
+                  {autoFillStatus === "running" ? "Filling..." : "Auto-Fill Desktop"}
+                </Button>
+                {(autoFillStatus === "success" || autoFillStatus === "partial" || autoFillStatus === "failed") && (
+                  <Button variant="ghost" onClick={resetAutoFill}>
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
 
             <div className="mt-4 flex gap-4 border-t pt-4">
