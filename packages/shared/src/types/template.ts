@@ -28,6 +28,7 @@ export type TargetSystemTemplate = {
   safetyRules: SafetyRule[];
   autoSaveSelector?: string;
   autoSaveControlId?: string;
+  submitWaitMs?: number;
   version: string;
   createdAt: string;
   updatedAt: string;

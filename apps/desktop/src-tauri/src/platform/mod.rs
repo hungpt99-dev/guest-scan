@@ -14,6 +14,8 @@ pub trait DesktopAutomation: Send + Sync {
 
     fn fill_desktop_field(&self, automation_id: &str, value: &str) -> Result<(), AppError>;
 
+    fn click_submit(&self, automation_id: &str) -> Result<(), AppError>;
+
     fn paste_clipboard(&self) -> Result<(), AppError>;
 }
 
@@ -48,6 +50,13 @@ impl DesktopAutomation for UnsupportedAutomation {
     }
 
     fn fill_desktop_field(&self, _automation_id: &str, _value: &str) -> Result<(), AppError> {
+        Err(AppError::new(
+            "UNSUPPORTED_PLATFORM",
+            "Desktop automation is not supported on this platform",
+        ))
+    }
+
+    fn click_submit(&self, _automation_id: &str) -> Result<(), AppError> {
         Err(AppError::new(
             "UNSUPPORTED_PLATFORM",
             "Desktop automation is not supported on this platform",

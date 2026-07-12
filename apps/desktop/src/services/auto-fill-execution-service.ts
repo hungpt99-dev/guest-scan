@@ -90,6 +90,8 @@ export interface FillExecutor {
   fillDesktopField(value: string, target?: FieldFillTarget): Promise<void>;
   fillCopyAssistant(value: string): Promise<void>;
   focusTargetApp(windowTitle?: string, processName?: string): Promise<void>;
+  clickSubmitButton(automationId: string): Promise<void>;
+  clickWebSubmit(selector: string): Promise<void>;
 }
 
 export interface AutoFillExecutionService {
@@ -531,6 +533,21 @@ class DefaultFillExecutor implements FillExecutor {
       await invokeIpc("focus_app_window", { windowTitle, processName });
     } catch (error) {
       logger.warn("AutoFillExecutionService: focusTargetApp failed", error);
+    }
+  }
+
+  async clickSubmitButton(automationId: string): Promise<void> {
+    if (!isTauri()) return;
+    await invokeIpc("click_submit_button", { automationId });
+  }
+
+  async clickWebSubmit(selector: string): Promise<void> {
+    if (isTauri()) {
+      try {
+        await invokeIpc("fill_web_field", { selector, value: "" });
+      } catch {
+        /* fallback: try clicking via injected JS in browser extension */
+      }
     }
   }
 

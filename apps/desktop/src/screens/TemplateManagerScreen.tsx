@@ -219,6 +219,48 @@ export default function TemplateManagerScreen() {
             </div>
 
             <div className="border-t pt-4">
+              <h3 className="mb-2 text-sm font-medium text-gray-700">Submit Action (optional)</h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    {editing.type === "web" ? "Submit Button CSS Selector" : "Submit Button Automation ID"}
+                  </label>
+                  <input
+                    type="text"
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    value={editing.type === "web" ? editing.autoSaveSelector || "" : editing.autoSaveControlId || ""}
+                    onChange={(e) => {
+                      if (editing.type === "web") {
+                        setEditing({ ...editing, autoSaveSelector: e.target.value });
+                      } else {
+                        setEditing({ ...editing, autoSaveControlId: e.target.value });
+                      }
+                    }}
+                    placeholder={editing.type === "web" ? "e.g. #submit-btn, button[type=submit]" : "e.g. submitButton"}
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    After filling all fields, click this element to submit the form
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Wait after submit (ms)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={30000}
+                    step={100}
+                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    value={editing.submitWaitMs ?? 2000}
+                    onChange={(e) => setEditing({ ...editing, submitWaitMs: parseInt(e.target.value) || 0 })}
+                  />
+                  <p className="mt-1 text-xs text-gray-400">
+                    How long to wait after clicking submit (0 = no wait, default 2000)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-medium text-gray-700">Field Mappings</h3>
                 <Button variant="secondary" onClick={handleAddMapping}>

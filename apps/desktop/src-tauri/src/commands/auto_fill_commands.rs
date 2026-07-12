@@ -26,6 +26,17 @@ pub async fn fill_desktop_field(automation_id: String, value: String) -> Result<
     automation.fill_desktop_field(&automation_id, &value)
 }
 
+/// Click a submit button in a desktop application.
+///
+/// Delegates to the platform-specific automation backend to find the
+/// UI element by its `accessibilityIdentifier` (macOS) or `AutomationId`
+/// (Windows) and perform a click action.
+#[tauri::command]
+pub async fn click_submit_button(automation_id: String) -> Result<(), AppError> {
+    let automation = create_platform_automation();
+    automation.click_submit(&automation_id)
+}
+
 /// Fill a value into a web browser form field.
 ///
 /// Copies the value to the system clipboard, then simulates the platform's

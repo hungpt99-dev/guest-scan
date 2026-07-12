@@ -118,6 +118,54 @@ impl DesktopAutomation for MacosAutomation {
         Ok(())
     }
 
+    fn click_submit(&self, automation_id: &str) -> Result<(), AppError> {
+        let escaped_id = escape_apple_script(automation_id);
+
+        let script = format!(
+            r#"tell application "System Events"
+                try
+                    tell (first process whose frontmost is true)
+                        set targetElement to missing value
+                        try
+                            repeat with f in (every button of scroll area 1 of group 1 of window 1)
+                                if (value of attribute "AXIdentifier" of f) is "{}" then
+                                    set targetElement to f
+                                    exit repeat
+                                end if
+                            end repeat
+                        end try
+                        if targetElement is missing value then
+                            try
+                                repeat with f in (every button of window 1)
+                                    if (value of attribute "AXIdentifier" of f) is "{}" then
+                                        set targetElement to f
+                                        exit repeat
+                                    end if
+                                end repeat
+                            end try
+                        end if
+                        if targetElement is not missing value then
+                            click targetElement
+                            return "OK"
+                        end if
+                    end tell
+                    return "AX_ERROR: element not found"
+                on error errMsg
+                    return "AX_ERROR: " & errMsg
+                end try
+            end tell"#,
+            escaped_id, escaped_id,
+        );
+
+        let result = run_osascript(&script)?;
+
+        if result.starts_with("AX_ERROR") || result.starts_with("PROCESS_ERROR") {
+            return Err(AppError::new("CLICK_FAILED", &format!("Could not click submit button '{}'", automation_id)));
+        }
+
+        Ok(())
+    }
+
     fn paste_clipboard(&self) -> Result<(), AppError> {
         let script = r#"tell application "System Events" to keystroke "v" using command down"#;
         run_osascript(script)?;

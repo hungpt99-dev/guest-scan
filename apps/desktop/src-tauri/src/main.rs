@@ -39,6 +39,7 @@ fn main() {
             auto_fill_commands::focus_app_window,
             auto_fill_commands::fill_desktop_field,
             auto_fill_commands::fill_web_field,
+            auto_fill_commands::click_submit_button,
         ])
         .run(tauri::generate_context!())
         .expect("Failed to run GuestFill");

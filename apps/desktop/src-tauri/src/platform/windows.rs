@@ -126,6 +126,35 @@ impl DesktopAutomation for WindowsAutomation {
         }
     }
 
+    fn click_submit(&self, automation_id: &str) -> Result<(), AppError> {
+        unsafe {
+            CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok();
+
+            let uia: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+                .map_err(|e| AppError::with_technical("UIA_CREATE_FAILED", "Failed to initialize UI Automation", e.to_string()))?;
+
+            let focused = uia.GetFocusedElement()
+                .map_err(|e| AppError::with_technical("UIA_NO_FOCUS", "No focused element found", e.to_string()))?;
+
+            let variant_id = VARIANT::from(automation_id);
+            let condition = uia.CreatePropertyCondition(UIA_AutomationIdPropertyId, &variant_id)
+                .map_err(|e| AppError::with_technical("UIA_CONDITION_FAILED", "Failed to create search condition", e.to_string()))?;
+
+            let element = focused.FindFirst(TreeScope_Descendants, &condition)
+                .map_err(|e| AppError::with_technical("UIA_BUTTON_NOT_FOUND", &format!("Submit button '{}' not found", automation_id), e.to_string()))?;
+
+            let invoke_pattern: IUIAutomationInvokePattern = element.GetCurrentPattern(UIA_InvokePatternId)
+                .map_err(|e| AppError::with_technical("UIA_NO_INVOKE_PATTERN", &format!("Button '{}' does not support InvokePattern", automation_id), e.to_string()))?
+                .cast()
+                .map_err(|e| AppError::with_technical("UIA_PATTERN_CAST_FAILED", "Failed to cast to InvokePattern", e.to_string()))?;
+
+            invoke_pattern.Invoke()
+                .map_err(|e| AppError::with_technical("UIA_INVOKE_FAILED", &format!("Failed to click submit button '{}'", automation_id), e.to_string()))?;
+
+            Ok(())
+        }
+    }
+
     fn paste_clipboard(&self) -> Result<(), AppError> {
         unsafe {
             let inputs = [

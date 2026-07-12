@@ -110,6 +110,8 @@ function createMockExecutor(): FillExecutor {
     fillDesktopField: async () => {},
     fillCopyAssistant: async () => {},
     focusTargetApp: async () => {},
+    clickSubmitButton: async () => {},
+    clickWebSubmit: async () => {},
   };
 }
 

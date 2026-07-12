@@ -107,6 +107,30 @@ export function useDesktopAutoFill(executor?: FillExecutor) {
         const failed = results.filter((r) => r.status === "FAILED").length;
         const skipped = results.filter((r) => r.status === "SKIPPED").length;
 
+        if (filled > 0 && template.autoSaveControlId) {
+          try {
+            await fillExecutor.clickSubmitButton(template.autoSaveControlId);
+            const waitMs = template.submitWaitMs ?? 2000;
+            if (waitMs > 0) {
+              await new Promise((resolve) => setTimeout(resolve, waitMs));
+            }
+            results.push({
+              formField: `__submit__ (${template.autoSaveControlId})`,
+              value: "",
+              status: "FILLED",
+            });
+            setFieldResults([...results]);
+          } catch (submitError) {
+            results.push({
+              formField: `__submit__ (${template.autoSaveControlId})`,
+              value: "",
+              status: "FAILED",
+              error: submitError instanceof Error ? submitError.message : "Submit click failed",
+            });
+            setFieldResults([...results]);
+          }
+        }
+
         if (filled > 0 && failed === 0 && skipped === 0) {
           setStatus("success");
         } else if (filled > 0) {
