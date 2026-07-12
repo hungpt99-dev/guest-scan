@@ -6,8 +6,8 @@ mod error;
 
 use app_state::AppState;
 use commands::{
-    auto_fill_commands, clipboard_commands, excel_commands, file_commands, ocr_commands,
-    settings_commands,
+    auto_fill_commands, azure_commands, clipboard_commands, credential_commands, excel_commands,
+    file_commands, ocr_commands, settings_commands,
 };
 
 fn main() {
@@ -27,6 +27,12 @@ fn main() {
             excel_commands::export_excel_placeholder,
             excel_commands::import_excel_placeholder,
             clipboard_commands::copy_to_clipboard,
+            azure_commands::check_azure_available,
+            azure_commands::extract_azure_document,
+            credential_commands::save_credential,
+            credential_commands::get_credential,
+            credential_commands::delete_credential,
+            credential_commands::check_credential_status,
             settings_commands::load_settings,
             settings_commands::save_settings,
             auto_fill_commands::focus_app_window,

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Card from "../components/common/Card";
+import OcrProviderCredentials from "../components/settings/OcrProviderCredentials";
 import { DEFAULT_KEYBOARD_SHORTCUTS } from "../features/fill/fillConstants";
 import { loadSettings, saveSettings, type FillSettings } from "../features/settings/settingsStore";
 
@@ -81,6 +82,8 @@ export default function SettingsScreen() {
           </div>
         </div>
       </Card>
+
+      <OcrProviderCredentials />
 
       <Card title="Auto-fill">
         <div className="space-y-4">

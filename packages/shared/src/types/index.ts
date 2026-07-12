@@ -19,3 +19,11 @@ export type { TransformRule } from "./transform";
 export type { TargetSystemType, SaveMode, FieldMapping, TargetSystemTemplate, SafetyRule } from "./template";
 export type { FillEventType, FillEvent } from "./event";
 export type { AppSettings, SettingsUpdate } from "./settings";
+export type {
+  CredentialStatus,
+  SaveCredentialRequest,
+  GetCredentialRequest,
+  OcrProviderCredentialConfig,
+  KeyType,
+} from "./credential";
+export { OCR_PROVIDER_CREDENTIAL_CONFIGS, KEYRING_SERVICE_NAME } from "./credential";
