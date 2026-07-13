@@ -35,6 +35,7 @@ export type GuestRow = {
   note?: string;
   ocrWarning?: string;
   sourceFile?: string;
+  imagePath?: string;
   createdAt: string;
   updatedAt: string;
 };

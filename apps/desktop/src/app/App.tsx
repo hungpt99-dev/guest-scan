@@ -4,6 +4,7 @@ import HomeScreen from "../screens/HomeScreen";
 import OcrScreen from "../screens/OcrScreen";
 import ImportExcelScreen from "../screens/ImportExcelScreen";
 import GuestListScreen from "../screens/GuestListScreen";
+import GuestFormScreen from "../screens/GuestFormScreen";
 import FillAssistantScreen from "../screens/FillAssistantScreen";
 import TemplateManagerScreen from "../screens/TemplateManagerScreen";
 import SettingsScreen from "../screens/SettingsScreen";
@@ -17,6 +18,8 @@ export default function App() {
         <Route path="/ocr" element={<OcrScreen />} />
         <Route path="/import-excel" element={<ImportExcelScreen />} />
         <Route path="/guests" element={<GuestListScreen />} />
+        <Route path="/guests/new" element={<GuestFormScreen />} />
+        <Route path="/guests/edit/:id" element={<GuestFormScreen />} />
         <Route path="/fill" element={<FillAssistantScreen />} />
         <Route path="/fill-assistant" element={<FillAssistantScreen />} />
         <Route path="/templates" element={<TemplateManagerScreen />} />

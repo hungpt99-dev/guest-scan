@@ -20,6 +20,8 @@ fn main() {
             file_commands::select_files,
             file_commands::select_folder,
             file_commands::select_output_file,
+            file_commands::pick_image_file,
+            file_commands::read_image_base64,
             file_commands::open_file,
             file_commands::open_folder,
             ocr_commands::run_ocr,

@@ -1,7 +1,7 @@
 import type { GuestRow, FillEvent } from "@guestfill/shared";
 import { maskPassportNumber, maskIdNumber, maskFullName } from "@guestfill/shared";
 import type { FillSession } from "./fillTypes";
-import { getAll, getById, getByIndex, put } from "../../lib/db";
+import { getAll, getById, getByIndex, put, remove } from "../../lib/db";
 
 let currentSession: FillSession | null = null;
 let currentGuest: GuestRow | null = null;
@@ -48,6 +48,43 @@ export async function getAllGuestRows(): Promise<GuestRow[]> {
 export async function getGuestRow(id: string): Promise<GuestRow | undefined> {
   if (!id) return undefined;
   return getById<GuestRow>("guest_rows", id);
+}
+
+export async function deleteGuestRow(id: string): Promise<void> {
+  if (!id) return;
+  await remove("guest_rows", id);
+}
+
+export function createNewGuest(overrides?: Partial<GuestRow>): GuestRow {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    sessionId: "manual-entry",
+    rowId: crypto.randomUUID(),
+    fullName: "",
+    surname: "",
+    givenName: "",
+    passportNumber: "",
+    idNumber: "",
+    nationality: "",
+    dateOfBirth: "",
+    gender: "UNKNOWN",
+    passportExpiryDate: "",
+    idExpiryDate: "",
+    issuingCountry: "",
+    issuingAuthority: "",
+    documentType: "PASSPORT",
+    roomNumber: "",
+    arrivalDate: "",
+    departureDate: "",
+    reservationCode: "",
+    imagePath: "",
+    status: "READY",
+    fillStatus: "PENDING",
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
 }
 
 export async function saveSession(session: FillSession): Promise<void> {
